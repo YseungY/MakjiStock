@@ -18,7 +18,7 @@ import {
   signed,
   won,
 } from "@/lib/bread-market/engine";
-import type { MarketData } from "@/lib/bread-market/market-data";
+import type { ShellData } from "@/lib/bread-market/page-data";
 import { SESSION_LABEL, SESSION_RANGE, type Session } from "@/lib/bread-market/reward-policy";
 import { seedClock, useSession, useTodayKey, syncLockFromServer } from "@/lib/bread-market/store";
 import {
@@ -118,13 +118,13 @@ function Tape({ todayKey, session }: { todayKey: string; session: Session }) {
   );
 }
 
-export function BreadMarketShell({ clock, market, children }: {
-  /** 서버가 잰 KST 시각. SSR 과 하이드레이션이 같은 날짜·장을 보게 한다. */
-  clock: { todayKey: string; hour: number };
-  /** 서버가 받아 온 시세. Supabase 가 안 되면 null 이고 화면은 시드로 돈다. */
-  market: MarketData | null;
-  children: React.ReactNode;
-}) {
+export function BreadMarketShell({
+  clock,
+  market,
+  lock,
+  predictions: initialPredictions,
+  children,
+}: ShellData & { children: React.ReactNode }) {
   /* 자식이 읽기 전에 심는다. 렌더 중 호출이지만 같은 값을 다시 넣는 것뿐이라
      몇 번 돌아도 결과가 같다. effect 로 미루면 그 사이 한 프레임 동안 시드
      값이 보인다 — 그게 없애려던 것이다. */
@@ -137,7 +137,9 @@ export function BreadMarketShell({ clock, market, children }: {
   const [sheet, setSheet] = useState<SheetState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [predictions, setPredictions] = useState<ServerPrediction[]>([]);
+  /* 서버가 준 값으로 시작한다. 빈 배열로 시작하면 첫 화면이 "기록 없음"이었다가
+     응답이 와서 뒤늦게 채워진다 — 그 한 박자가 늦게 그려지던 것이다. */
+  const [predictions, setPredictions] = useState<ServerPrediction[]>(initialPredictions);
 
   const refreshPredictions = useCallback(() => {
     fetch("/api/predictions")
@@ -148,16 +150,11 @@ export function BreadMarketShell({ clock, market, children }: {
       .catch(() => {});
   }, []);
 
+  /* 잠금도 서버가 정본이다. 마켓 화면이 localStorage 만 보면 MY 와 어긋난다.
+     값은 이미 props 로 와 있으니 받아올 것은 없고, localStorage 만 맞춰 둔다. */
   useEffect(() => {
-    refreshPredictions();
-    // 잠금도 서버가 정본이다. 마켓 화면이 localStorage 만 보면 MY 와 어긋난다.
-    fetch("/api/locks")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => {
-        if (data) syncLockFromServer(data.lock ?? null);
-      })
-      .catch(() => {});
-  }, [refreshPredictions]);
+    syncLockFromServer(lock.lock);
+  }, [lock]);
 
   /* 탭 이동 시 스크롤 맨 위로. 단 #앵커로 왔으면 그 자리로 보낸다.
      스크롤 컨테이너가 따로 있어 브라우저 기본 해시 이동이 듣지 않는다.
@@ -194,9 +191,9 @@ export function BreadMarketShell({ clock, market, children }: {
   const ctx = useMemo<Ctx | null>(
     () =>
       todayKey
-        ? { todayKey, predictions, refreshPredictions, openSheet: setSheet, toast }
+        ? { todayKey, predictions, refreshPredictions, lock, openSheet: setSheet, toast }
         : null,
-    [todayKey, predictions, refreshPredictions, toast],
+    [todayKey, predictions, refreshPredictions, lock, toast],
   );
 
   const activeIdx = Math.max(0, TABS.findIndex((t) => pathname?.startsWith(t.href)));

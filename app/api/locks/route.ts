@@ -1,9 +1,9 @@
 import pricingConfig from "@/config/pricing-products.json";
-import { decryptSecret } from "@/lib/crypto";
 import { currentPriceOf } from "@/lib/pricing/current-price";
 import { kstNow } from "@/lib/market/calendar";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getOrCreateVisitorHash, readVisitorHash } from "@/lib/visitor";
+import { loadLock } from "@/lib/bread-market/visitor-data";
+import { getOrCreateVisitorHash } from "@/lib/visitor";
 
 export const dynamic = "force-dynamic";
 
@@ -42,50 +42,14 @@ function protectionWindow(lockDate: string) {
   };
 }
 
+/* 화면은 이제 페이지 렌더에서 loadLock 을 직접 부른다(page-data.ts).
+   이 경로는 같은 값을 밖에서 들여다보기 위해 남겨 둔다. */
 export async function GET() {
-  const visitorHash = await readVisitorHash();
-  if (!visitorHash) return Response.json({ lock: null });
-
-  const { date } = kstNow();
-  const db = supabaseAdmin();
-
-  // date 는 02:00 에 바뀌는 시장 날짜라 자정 뒤 보호 구간도 같은 날 잠금이다.
-  const { data, error } = await db
-    .from("price_locks")
-    .select(
-      "id,product_id,lock_date,lock_session,locked_price_won,protect_from,protect_until,status,lock_code_amount_won,current_price_won_at_protect,reward_claim_id,products(ticker,name)",
-    )
-    .eq("visitor_hash", visitorHash)
-    .eq("lock_date", date)
-    .maybeSingle();
-
-  if (error) return Response.json({ error: error.message }, { status: 502 });
-
-  const lock = data;
-  if (!lock) return Response.json({ lock: null });
-
-  /* 차액 할인코드는 이메일로 보내지 않고 여기서 바로 내려준다.
-     쿠키가 본인 확인을 대신하므로 자기 잠금의 코드만 볼 수 있다. */
-  let discountCode: string | null = null;
-  let validUntil: string | null = null;
-  if (lock.reward_claim_id) {
-    const { data: claim } = await db
-      .from("reward_claims")
-      .select("discount_code_ciphertext,valid_until,status")
-      .eq("id", lock.reward_claim_id)
-      .maybeSingle();
-    if (claim?.discount_code_ciphertext) {
-      try {
-        discountCode = decryptSecret(claim.discount_code_ciphertext);
-        validUntil = claim.valid_until;
-      } catch {
-        // 키가 바뀌었거나 값이 깨진 경우. 잠금 정보는 그대로 보여준다.
-        discountCode = null;
-      }
-    }
+  try {
+    return Response.json({ ...(await loadLock()) });
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 });
   }
-
-  return Response.json({ lock, discountCode, validUntil });
 }
 
 export async function POST(request: Request) {

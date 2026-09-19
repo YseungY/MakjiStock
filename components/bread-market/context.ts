@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
+import type { LockData, ServerPredictionRow } from "@/lib/bread-market/visitor-data";
 
 export type SheetState =
   | { type: "detail"; tk: string }
@@ -9,18 +10,8 @@ export type SheetState =
   | { type: "lock"; tk: string }
   | null;
 
-export type ServerPrediction = {
-  id: string;
-  direction: "up" | "down";
-  reference_price_won: number;
-  target_publish_date: string;
-  target_session: "am" | "pm";
-  result: "pending" | "hit" | "miss" | "void";
-  result_price_won: number | null;
-  reward_rate_pct: number;
-  products: { ticker: string; name: string } | null;
-  reward: { code: string; amountWon: number | null; validUntil: string | null } | null;
-};
+/* 서버 로더가 내려주는 모양 그대로다. 두 벌로 두면 한쪽만 고쳐져 어긋난다. */
+export type ServerPrediction = ServerPredictionRow;
 
 export type BreadMarketCtx = {
   todayKey: string;
@@ -28,6 +19,8 @@ export type BreadMarketCtx = {
      화면마다 따로 받으면 요청이 늘고 상태가 갈라진다. */
   predictions: ServerPrediction[];
   refreshPredictions: () => void;
+  /* 이 브라우저의 오늘 잠금. 서버가 정본이고 첫 HTML 에 이미 들어 있다. */
+  lock: LockData;
   openSheet: (s: SheetState) => void;
   toast: (icon: string, title: string, desc?: string) => void;
 };

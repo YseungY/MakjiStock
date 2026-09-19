@@ -4,42 +4,13 @@ import { breadOf, quoteAt, won } from "@/lib/bread-market/engine";
 import { lockPhaseOf } from "@/lib/bread-market/flow";
 import { CONSUMER_REWARD_NOTICE, SESSION_LABEL, lockProtection } from "@/lib/bread-market/reward-policy";
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { resetBreadState, useBreadState, useSession } from "@/lib/bread-market/store";
 import { useBreadMarket } from "./context";
 import { Photo } from "./sheets";
 
-/* MY: 비로그인 · 이 브라우저 기준. 가격 잠금 → 구매 → 예측 → 할인코드 순서로 보여줍니다. */
-type ServerLock = {
-  lock: {
-    lock_session: "am" | "pm";
-    locked_price_won: number;
-    lock_code_amount_won: number | null;
-    status: string;
-    products: { ticker: string; name: string } | null;
-  } | null;
-  discountCode: string | null;
-  validUntil: string | null;
-};
-
-/* 잠금 차액 할인코드는 이메일로 보내지 않고 MY 에서 바로 보여준다.
-   비로그인이라 visitor_token 쿠키가 본인 확인을 대신한다. */
-function useLockCode(): ServerLock {
-  const [state, setState] = useState<ServerLock>({ lock: null, discountCode: null, validUntil: null });
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/locks")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: ServerLock | null) => {
-        if (alive && data) setState(data);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return state;
-}
+/* MY: 비로그인 · 이 브라우저 기준. 가격 잠금 → 구매 → 예측 → 할인코드 순서로 보여줍니다.
+   잠금·예측·할인코드는 서버가 첫 HTML 에 이미 실어 보낸다(page-data.ts).
+   여기서 다시 받아오지 않는다 — 그러면 "기록 없음"을 먼저 그렸다가 덮어쓴다. */
 
 const RESULT_LABEL: Record<string, { title: string; tone: string }> = {
   pending: { title: "판정 대기", tone: "flat" },
@@ -49,8 +20,7 @@ const RESULT_LABEL: Record<string, { title: string; tone: string }> = {
 };
 
 export function MyPanel() {
-  const { todayKey, openSheet, predictions: preds } = useBreadMarket();
-  const server = useLockCode();
+  const { todayKey, openSheet, predictions: preds, lock: server } = useBreadMarket();
 
   const my = useBreadState();
   const now = useSession();

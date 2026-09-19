@@ -1,9 +1,9 @@
-import { decryptSecret } from "@/lib/crypto";
 import { currentPriceOf } from "@/lib/pricing/current-price";
 import { kstNow } from "@/lib/market/calendar";
 import { predictionSchedule } from "@/lib/predictions/schedule";
 import { supabaseAdmin } from "@/lib/supabase/admin";
-import { getOrCreateVisitorHash, readVisitorHash } from "@/lib/visitor";
+import { loadPredictions } from "@/lib/bread-market/visitor-data";
+import { getOrCreateVisitorHash } from "@/lib/visitor";
 
 export const dynamic = "force-dynamic";
 
@@ -36,50 +36,14 @@ async function tickerToProductId(ticker: string): Promise<string | null> {
 }
 
 
+/* 화면은 이제 페이지 렌더에서 loadPredictions 을 직접 부른다(page-data.ts).
+   이 경로는 같은 값을 밖에서 들여다보기 위해 남겨 둔다. */
 export async function GET() {
-  const visitorHash = await readVisitorHash();
-  if (!visitorHash) return Response.json({ predictions: [] });
-
-  const db = supabaseAdmin();
-  const { data, error } = await db
-    .from("prediction_entries")
-    .select(
-      "id,product_id,direction,reference_price_won,target_publish_date,target_session,result,result_price_won,reward_rate_pct,submitted_at,resolved_at,products(ticker,name)",
-    )
-    .eq("visitor_hash", visitorHash)
-    .eq("role", "general")
-    .order("submitted_at", { ascending: false })
-    .limit(20);
-  if (error) return Response.json({ error: error.message }, { status: 502 });
-
-  const entries = data ?? [];
-  const hitIds = entries.filter((e) => e.result === "hit" || e.result === "void").map((e) => e.id);
-
-  /* 보상 코드는 이메일로 보내지 않고 여기서 바로 내려준다.
-     쿠키가 본인 확인을 대신하므로 자기 예측의 코드만 보인다. */
-  const codes = new Map<string, { code: string; amountWon: number | null; validUntil: string | null }>();
-  if (hitIds.length > 0) {
-    const { data: claims } = await db
-      .from("reward_claims")
-      .select("prediction_entry_id,discount_code_ciphertext,amount_won,valid_until")
-      .in("prediction_entry_id", hitIds);
-    for (const claim of claims ?? []) {
-      if (!claim.discount_code_ciphertext || !claim.prediction_entry_id) continue;
-      try {
-        codes.set(claim.prediction_entry_id, {
-          code: decryptSecret(claim.discount_code_ciphertext),
-          amountWon: claim.amount_won,
-          validUntil: claim.valid_until,
-        });
-      } catch {
-        // 키가 바뀌었거나 값이 깨진 경우. 예측 기록은 그대로 보여준다.
-      }
-    }
+  try {
+    return Response.json({ predictions: await loadPredictions() });
+  } catch (e) {
+    return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 });
   }
-
-  return Response.json({
-    predictions: entries.map((e) => ({ ...e, reward: codes.get(e.id) ?? null })),
-  });
 }
 
 export async function POST(request: Request) {
