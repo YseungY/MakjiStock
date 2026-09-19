@@ -1,0 +1,172 @@
+import { supabaseAdmin } from "@/lib/supabase/admin";
+
+/* Cafe24 Admin API OAuth
+   - access_token 2시간, refresh_token 2주 (공식 문서 기준)
+   - 토큰은 cafe24_tokens 에 몰 하나당 한 행으로 둔다
+   - 갱신하면 refresh_token 도 새로 내려오므로 둘 다 저장한다 */
+
+const REFRESH_MARGIN_MS = 5 * 60 * 1000; // 만료 5분 전이면 미리 갱신
+
+export type Cafe24Tokens = {
+  mall_id: string;
+  access_token: string;
+  refresh_token: string;
+  access_token_expires_at: string;
+  refresh_token_expires_at: string;
+  scopes: string[];
+};
+
+export function cafe24Env() {
+  const mallId = process.env.CAFE24_MALL_ID;
+  const clientId = process.env.CAFE24_CLIENT_ID;
+  const clientSecret = process.env.CAFE24_CLIENT_SECRET;
+  if (!mallId || !clientId || !clientSecret) {
+    throw new Error("CAFE24_MALL_ID · CAFE24_CLIENT_ID · CAFE24_CLIENT_SECRET 가 필요합니다.");
+  }
+  return { mallId, clientId, clientSecret };
+}
+
+export function cafe24RedirectUri() {
+  const base =
+    process.env.CAFE24_REDIRECT_BASE_URL ??
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : "http://localhost:3000");
+  return `${base}/api/auth/cafe24/callback`;
+}
+
+/* 공식 문서가 client_id/secret 전달 방식을 명시하지 않는다.
+   Cafe24 는 Basic 인증을 쓰는 것으로 알려져 있어 그쪽을 먼저 시도하고,
+   401/400 이면 body 방식으로 한 번 더 시도한다.
+   ponytail: 실제 자격증명으로 한 번 확인되면 성공한 쪽만 남긴다. */
+async function requestToken(params: Record<string, string>) {
+  const { mallId, clientId, clientSecret } = cafe24Env();
+  const url = `https://${mallId}.cafe24api.com/api/v2/oauth/token`;
+  const basic = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+
+  const attempts: RequestInit[] = [
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basic}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams(params).toString(),
+    },
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        ...params,
+        client_id: clientId,
+        client_secret: clientSecret,
+      }).toString(),
+    },
+  ];
+
+  let lastBody = "";
+  for (const init of attempts) {
+    const response = await fetch(url, init);
+    const text = await response.text();
+    if (response.ok) return JSON.parse(text);
+    lastBody = `${response.status}: ${text.slice(0, 400)}`;
+    if (response.status >= 500) break; // 서버 오류는 방식 문제가 아니다
+  }
+  throw new Error(`Cafe24 토큰 요청 실패 — ${lastBody}`);
+}
+
+type TokenResponse = {
+  access_token: string;
+  refresh_token: string;
+  expires_at: string;
+  refresh_token_expires_at: string;
+  scopes?: string[];
+};
+
+async function save(payload: TokenResponse) {
+  const { mallId } = cafe24Env();
+  const row = {
+    mall_id: mallId,
+    access_token: payload.access_token,
+    refresh_token: payload.refresh_token,
+    access_token_expires_at: new Date(payload.expires_at).toISOString(),
+    refresh_token_expires_at: new Date(payload.refresh_token_expires_at).toISOString(),
+    scopes: payload.scopes ?? [],
+    updated_at: new Date().toISOString(),
+  };
+  const { error } = await supabaseAdmin().from("cafe24_tokens").upsert(row);
+  if (error) throw new Error(`토큰 저장 실패: ${error.message}`);
+  return row;
+}
+
+export async function exchangeCodeForTokens(code: string) {
+  const payload = (await requestToken({
+    grant_type: "authorization_code",
+    code,
+    redirect_uri: cafe24RedirectUri(),
+  })) as TokenResponse;
+  return save(payload);
+}
+
+/** 저장된 토큰을 돌려준다. 만료가 가까우면 먼저 갱신한다. */
+export async function getAccessToken(): Promise<string> {
+  const { mallId } = cafe24Env();
+  const { data, error } = await supabaseAdmin()
+    .from("cafe24_tokens")
+    .select("*")
+    .eq("mall_id", mallId)
+    .maybeSingle();
+
+  if (error) throw new Error(`토큰 조회 실패: ${error.message}`);
+  if (!data) {
+    throw new Error("Cafe24 토큰이 없습니다. /api/auth/cafe24/start 로 인증을 먼저 진행하세요.");
+  }
+
+  const tokens = data as Cafe24Tokens;
+  const expiresAt = new Date(tokens.access_token_expires_at).getTime();
+  if (Date.now() < expiresAt - REFRESH_MARGIN_MS) return tokens.access_token;
+
+  if (Date.now() >= new Date(tokens.refresh_token_expires_at).getTime()) {
+    throw new Error("refresh_token 이 만료됐습니다. /api/auth/cafe24/start 로 다시 인증하세요.");
+  }
+
+  const refreshed = (await requestToken({
+    grant_type: "refresh_token",
+    refresh_token: tokens.refresh_token,
+  })) as TokenResponse;
+  const saved = await save(refreshed);
+  return saved.access_token;
+}
+
+/** Admin API 호출. 401 이면 한 번 갱신하고 재시도한다 (PRD §12.2). */
+export async function cafe24Request<T = unknown>(
+  pathname: string,
+  init: RequestInit = {},
+): Promise<T> {
+  const { mallId } = cafe24Env();
+  const call = async (token: string) =>
+    fetch(`https://${mallId}.cafe24api.com${pathname}`, {
+      ...init,
+      headers: {
+        ...init.headers,
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+    });
+
+  let response = await call(await getAccessToken());
+  if (response.status === 401) {
+    const { mallId: id } = cafe24Env();
+    await supabaseAdmin()
+      .from("cafe24_tokens")
+      .update({ access_token_expires_at: new Date(0).toISOString() })
+      .eq("mall_id", id);
+    response = await call(await getAccessToken());
+  }
+
+  const text = await response.text();
+  if (!response.ok) {
+    throw new Error(`Cafe24 ${pathname} ${response.status}: ${text.slice(0, 400)}`);
+  }
+  return JSON.parse(text) as T;
+}
