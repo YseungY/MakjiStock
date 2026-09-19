@@ -259,21 +259,17 @@ export async function POST(request: Request) {
         }
         const path = `/api/v2/admin/products/${product.cafe24_product_no}?shop_no=${shopNo}`;
         try {
-          const before = await cafe24Request<{ product?: { price?: string } }>(
-            `${path}&fields=product_no,product_name,price`,
-          );
-          const currentWon = Math.round(Number(before.product?.price ?? NaN));
-          let status: "applied" | "skipped_same_price" = "skipped_same_price";
-          if (currentWon !== calc!.priceWon) {
-            await cafe24Request(path, {
-              method: "PUT",
-              body: JSON.stringify({ shop_no: shopNo, request: { price: String(calc!.priceWon) } }),
-            });
-            status = "applied";
-          }
+          /* 계산된 가격을 항상 PUT 한다. GET 으로 현재가를 먼저 보던 방식은
+             호출이 2번이고, 같은 값이면 PUT 이 어차피 무해하다.
+             대신 Cafe24 쪽 변경 전 가격은 남지 않는다. 우리 직전 가격은
+             daily_prices.previous_price_won 에 이미 있다. */
+          await cafe24Request(path, {
+            method: "PUT",
+            body: JSON.stringify({ shop_no: shopNo, request: { price: String(calc!.priceWon) } }),
+          });
           await db
             .from("daily_prices")
-            .update({ cafe24_apply_status: status, applied_at: new Date().toISOString() })
+            .update({ cafe24_apply_status: "applied", applied_at: new Date().toISOString() })
             .eq("product_id", product.id)
             .eq("publish_date", publishDate)
             .eq("price_session", session)
@@ -281,9 +277,9 @@ export async function POST(request: Request) {
           applied.push({
             ticker: product.ticker,
             productNo: String(product.cafe24_product_no),
-            before: String(currentWon),
-            after: String(calc!.priceWon),
-            result: status,
+            previousWon: String(prevByProduct.get(product.id) ?? "-"),
+            appliedWon: String(calc!.priceWon),
+            result: "applied",
           });
         } catch (cause) {
           const message = cause instanceof Error ? cause.message : String(cause);
