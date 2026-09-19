@@ -1,4 +1,5 @@
 import pricingConfig from "@/config/pricing-products.json";
+import { decryptSecret } from "@/lib/crypto";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getOrCreateVisitorHash, readVisitorHash } from "@/lib/visitor";
 
@@ -48,15 +49,51 @@ export async function GET() {
   if (!visitorHash) return Response.json({ lock: null });
 
   const { date } = kstNow();
-  const { data, error } = await supabaseAdmin()
+  const db = supabaseAdmin();
+
+  /* 오후 잠금의 보호 구간은 다음 날 00:00~04:59 다. 그 시간대에는 어제 잠금을
+     보여줘야 한다. 오늘·어제 둘 다 보고 보호가 아직 끝나지 않은 것을 고른다. */
+  const yesterday = addDays(date, -1);
+  const { data, error } = await db
     .from("price_locks")
-    .select("id,product_id,lock_date,lock_session,locked_price_won,protect_from,protect_until,status,lock_code_amount_won")
+    .select(
+      "id,product_id,lock_date,lock_session,locked_price_won,protect_from,protect_until,status,lock_code_amount_won,current_price_won_at_protect,reward_claim_id",
+    )
     .eq("visitor_hash", visitorHash)
-    .eq("lock_date", date)
-    .maybeSingle();
+    .in("lock_date", [date, yesterday])
+    .order("lock_date", { ascending: false });
 
   if (error) return Response.json({ error: error.message }, { status: 502 });
-  return Response.json({ lock: data ?? null });
+
+  const now = Date.now();
+  const lock =
+    (data ?? []).find((row) => row.lock_date === date) ??
+    (data ?? []).find((row) => new Date(row.protect_until).getTime() > now) ??
+    null;
+  if (!lock) return Response.json({ lock: null });
+
+  /* 차액 할인코드는 이메일로 보내지 않고 여기서 바로 내려준다.
+     쿠키가 본인 확인을 대신하므로 자기 잠금의 코드만 볼 수 있다. */
+  let discountCode: string | null = null;
+  let validUntil: string | null = null;
+  if (lock.reward_claim_id) {
+    const { data: claim } = await db
+      .from("reward_claims")
+      .select("discount_code_ciphertext,valid_until,status")
+      .eq("id", lock.reward_claim_id)
+      .maybeSingle();
+    if (claim?.discount_code_ciphertext) {
+      try {
+        discountCode = decryptSecret(claim.discount_code_ciphertext);
+        validUntil = claim.valid_until;
+      } catch {
+        // 키가 바뀌었거나 값이 깨진 경우. 잠금 정보는 그대로 보여준다.
+        discountCode = null;
+      }
+    }
+  }
+
+  return Response.json({ lock, discountCode, validUntil });
 }
 
 export async function POST(request: Request) {

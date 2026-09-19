@@ -3,14 +3,41 @@
 import { BREADS, breadOf, quoteAt, won } from "@/lib/bread-market/engine";
 import { lockPhaseOf } from "@/lib/bread-market/flow";
 import { CONSUMER_REWARD_NOTICE, SESSION_LABEL, lockProtection } from "@/lib/bread-market/reward-policy";
+import { useEffect, useState } from "react";
 import { resetBreadState, useBreadState, useSession } from "@/lib/bread-market/store";
 import { useBreadMarket } from "./context";
 import { DemoClock } from "./MarketPanel";
 import { Photo, PredictionResult } from "./sheets";
 
 /* MY: 비로그인 · 이 브라우저 기준. 가격 잠금 → 구매 → 예측 → 할인코드 순서로 보여줍니다. */
+type ServerLock = {
+  lock: { locked_price_won: number; lock_code_amount_won: number | null } | null;
+  discountCode: string | null;
+  validUntil: string | null;
+};
+
+/* 잠금 차액 할인코드는 이메일로 보내지 않고 MY 에서 바로 보여준다.
+   비로그인이라 visitor_token 쿠키가 본인 확인을 대신한다. */
+function useLockCode(): ServerLock {
+  const [state, setState] = useState<ServerLock>({ lock: null, discountCode: null, validUntil: null });
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/locks")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: ServerLock | null) => {
+        if (alive && data) setState(data);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return state;
+}
+
 export function MyPanel() {
   const { todayKey, openSheet } = useBreadMarket();
+  const server = useLockCode();
   const my = useBreadState();
   const now = useSession();
   const session = now.session;
@@ -42,7 +69,13 @@ export function MyPanel() {
                 <b>{lockBread.name}</b>
                 <span>
                   {SESSION_LABEL[lock.session]} 잠금 {won(lock.lockedPrice)}원 · {lockProtection(lock.session)?.label} 사용
-                  {lock.lockCode ? <><br />잠금가 할인코드 <b className="n">{lock.lockCode.code}</b> · {won(lock.lockCode.amount)}원</> : null}
+                  {server.discountCode ? (
+                    <>
+                      <br />잠금가 할인코드 <b className="n">{server.discountCode}</b>
+                      {server.lock?.lock_code_amount_won ? ` · ${won(server.lock.lock_code_amount_won)}원 할인` : null}
+                      <br />주문서에 입력하면 잠금가로 결제됩니다.
+                    </>
+                  ) : null}
                 </span>
               </div>
               <div className="myrow__v">

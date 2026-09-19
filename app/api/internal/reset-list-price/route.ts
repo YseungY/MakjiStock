@@ -1,4 +1,5 @@
 import { cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
+import { issueLockCodes } from "@/lib/locks/lock-codes";
 import { kstToday } from "@/lib/pricing/dates.mjs";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -112,6 +113,18 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       }
     }
 
+    /* 00:00 에 어제 오후 잠금자의 보호가 시작된다. 몰은 정가로 돌아갔으므로
+       차액은 (정가 - 잠금가) 다. */
+    const yesterday = new Date(`${targetDate}T00:00:00Z`);
+    yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+    const basePriceByProduct = new Map(products.map((p) => [p.id, p.base_price_won]));
+    const lockCodes = await issueLockCodes({
+      lockSession: "pm",
+      lockDate: yesterday.toISOString().slice(0, 10),
+      priceOf: (productId) => basePriceByProduct.get(productId) ?? null,
+      commit,
+    });
+
     const someFailed = applied.some((a) => a.result === "failed");
     if (jobId) {
       await db
@@ -120,7 +133,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
           // 실패분만 남기고 성공분은 되돌리지 않는다 (PRD §11.4)
           status: !commit ? "calculated" : someFailed ? "partially_failed" : "completed",
           finished_at: new Date().toISOString(),
-          step_log: { trigger, applied },
+          step_log: { trigger, applied, lockCodes },
         })
         .eq("id", jobId);
     }
@@ -131,6 +144,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       targetDate,
       note: "00:00~05:59 정가 구간. 잠금가는 차액 할인코드로 실현한다.",
       products: applied,
+      lockCodes,
     });
   } catch (cause) {
     const message = cause instanceof Error ? cause.message : String(cause);

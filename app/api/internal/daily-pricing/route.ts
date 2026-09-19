@@ -1,5 +1,6 @@
 import pricingConfig from "@/config/pricing-products.json";
 import { cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
+import { issueLockCodes, type IssueResult } from "@/lib/locks/lock-codes";
 import { addDays, kstToday } from "@/lib/pricing/dates.mjs";
 import { fetchUsdKrwOpenCloseRates } from "@/lib/pricing/fx.mjs";
 import { fetchTrendsSeparately } from "@/lib/pricing/naver.mjs";
@@ -346,6 +347,19 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       }
     }
 
+    /* 오후가가 확정되면 오전 잠금자의 보호가 16:00 에 시작된다.
+       잠금가와 오후가의 차액을 할인코드로 발급한다 (PRD §4.4). */
+    let lockCodes: IssueResult[] = [];
+    if (session === "pm") {
+      const priceByProduct = new Map(calculated.map(({ product, calc }) => [product.id, calc!.priceWon]));
+      lockCodes = await issueLockCodes({
+        lockSession: "am",
+        lockDate: publishDate,
+        priceOf: (productId) => priceByProduct.get(productId) ?? null,
+        commit,
+      });
+    }
+
     const someFailed = applied.some((a) => a.result === "failed");
     if (jobId) {
       await db
@@ -353,7 +367,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
         .update({
           status: commit ? (someFailed ? "partially_failed" : "completed") : "calculated",
           finished_at: new Date().toISOString(),
-          step_log: { startedAt, collected: rows.length, calculated: calculated.length, applied },
+          step_log: { startedAt, collected: rows.length, calculated: calculated.length, applied, lockCodes },
         })
         .eq("id", jobId);
     }
@@ -390,6 +404,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
           : { ticker: r.product.ticker, name: r.product.name, status: "held", reason: r.reason },
       ),
       cafe24: commit ? applied : "드라이런 — Cafe24 를 호출하지 않았습니다. ?commit=1 로 반영합니다.",
+      lockCodes: session === "pm" ? lockCodes : "오전장에는 발급하지 않습니다 (16:00 보호 시작 시점에 발급)",
     });
   } catch (cause) {
     return fail("pipeline", cause);
