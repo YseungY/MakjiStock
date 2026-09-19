@@ -75,6 +75,14 @@ async function requestToken(params: Record<string, string>) {
   throw new Error(`Cafe24 토큰 요청 실패 — ${lastBody}`);
 }
 
+/* Cafe24 는 만료 시각을 KST 로 주면서 타임존 표시를 붙이지 않는다.
+   ("2026-09-19T15:52:50.000") 그대로 new Date() 에 넣으면 UTC 로 읽혀
+   실제보다 9시간 뒤로 잡히고, 만료된 토큰을 살아 있다고 오판한다. */
+export function parseCafe24Time(value: string): Date {
+  const hasZone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(value.trim());
+  return new Date(hasZone ? value : `${value.trim()}+09:00`);
+}
+
 type TokenResponse = {
   access_token: string;
   refresh_token: string;
@@ -89,8 +97,8 @@ async function save(payload: TokenResponse) {
     mall_id: mallId,
     access_token: payload.access_token,
     refresh_token: payload.refresh_token,
-    access_token_expires_at: new Date(payload.expires_at).toISOString(),
-    refresh_token_expires_at: new Date(payload.refresh_token_expires_at).toISOString(),
+    access_token_expires_at: parseCafe24Time(payload.expires_at).toISOString(),
+    refresh_token_expires_at: parseCafe24Time(payload.refresh_token_expires_at).toISOString(),
     scopes: payload.scopes ?? [],
     updated_at: new Date().toISOString(),
   };
