@@ -135,10 +135,11 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
     setHover(Math.round(t * (ser.length - 1)));
   }
   const col = dirColor(cls(q.vsBase));
-  /* 환율 먼저, 검색 할인 다음. 환율이 오른 날은 환율만 반영한 중간 가격이
-     정가 위로 올라가 보이므로 정가에 멈춰 보여주고, 상승분은 검색 할인에서 뺀다고 적는다. */
+  /* 환율 먼저, 검색 할인 다음 — 두 번에 걸쳐 가격이 바뀌어 보이게 한다.
+     환율이 오른 날은 절반만 반영한 중간가가 정가보다 조금 높게 나온다(11,000 → 11,060).
+     정가를 넘지 않는 건 최종가이고, 중간가는 계산 과정이라 그대로 보여준다. */
   const fxRose = q.fxDisc < 0;
-  const fxOnlyPriceWon = Math.min(b.base, Math.round((b.base * (1 - q.fxDisc / 100)) / 10) * 10);
+  const fxOnlyPriceWon = Math.round((b.base * (1 - q.fxDisc / 100)) / 10) * 10;
   // 할인 합이 음수면 정가에서 멈춘다 (할증 없음)
   const stoppedAtBase = q.searchDisc + q.fxDisc < 0;
   const gid = `g${b.tk}`;
@@ -259,7 +260,7 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
           <span className="calc__step-l">
             <i className="calc__k" style={{ background: "#3C7CB8" }} />환율 반영{" "}
             <small className={discCls(q.fxDisc)}>{discTxt(q.fxDisc)}</small>
-            <small style={{ color: "var(--ink-3)" }}> · {fxLabel(q.fxDrop)}{fxRose ? " · 정가 위로는 안 올라가요" : ""}</small>
+            <small style={{ color: "var(--ink-3)" }}> · {fxLabel(q.fxDrop)}{fxRose ? " · 오른 폭은 절반만" : ""}</small>
           </span>
           <b className="n calc__step-p is-struck">{won(fxOnlyPriceWon)}원</b>
         </div>
@@ -269,7 +270,6 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
             <small className={discCls(q.searchDisc)}>{discTxt(q.searchDisc)}</small>
             <small style={{ color: "var(--ink-3)" }}>
               {" "}· 검색지수 {fixed(q.searchIdx, 1)}
-              {fxRose ? ` · 환율 상승분 ${fixed(-q.fxDisc, 1)}%p 차감` : ""}
               {stoppedAtBase ? " · 정가에서 멈춤" : ""}
             </small>
           </span>
