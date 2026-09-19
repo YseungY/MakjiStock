@@ -176,6 +176,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       }
       return Response.json({
         mode: "held",
+        trigger: request.headers.get("x-vercel-cron-schedule") ?? "manual",
         reason:
           session === "pm"
             ? "당일 시가가 없습니다(비영업일). 오전 확정가를 유지합니다."
