@@ -1,0 +1,21 @@
+{
+  "_comment": [
+    "데모몰(rabbit3456) 임시 매핑. Cafe24 무료체험몰의 기본 샘플 상품에 우리 6종을 붙여",
+    "가격 반영 파이프라인을 검증하기 위한 것이다. 상품 성격이 비슷한 것끼리 골랐다.",
+    "",
+    "실제 막지 상품 6종이 몰에 등록되면 이 파일을 지운다.",
+    "그러면 sync-products 가 이름 매칭으로 자동 전환된다.",
+    "",
+    "가격은 우리가 계산해 덮어쓰므로 샘플 상품의 원래 가격은 의미가 없다.",
+    "정가(base_price_won)는 Supabase products 의 값을 쓴다."
+  ],
+  "_mallId": "rabbit3456",
+  "map": {
+    "morning_roll": { "productNo": 12, "sampleName": "부드러운 우유 모닝롤 6개입" },
+    "tetris_bread": { "productNo": 11, "sampleName": "순수 우유 식빵" },
+    "english_muffin": { "productNo": 29, "sampleName": "쫄깃한 플레인 베이글" },
+    "gluten_free_scone": { "productNo": 18, "sampleName": "고소한 버터 스콘" },
+    "gluten_free_financier": { "productNo": 46, "sampleName": "고소하고 담백한 플레인 휘낭시에" },
+    "gluten_free_frozen_dough_set": { "productNo": 49, "sampleName": "매일 아침 모닝 빵 박스 선물세트" }
+  }
+}

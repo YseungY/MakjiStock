@@ -1,3 +1,4 @@
+import overrideFile from "@/config/cafe24-product-map.json";
 import { cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -13,6 +14,12 @@ function authorized(request: Request) {
   if (!secret) return false;
   return request.headers.get("authorization") === `Bearer ${secret}`;
 }
+
+/* 데모몰에는 막지 상품이 없고 Cafe24 기본 샘플만 있다. 그동안은 수동 매핑을 쓴다.
+   실제 상품이 등록되면 config/cafe24-product-map.json 을 지운다 —
+   그러면 override 가 비어 아래 이름 매칭으로 자동 전환된다. */
+const OVERRIDE: Record<string, { productNo: number; sampleName: string }> =
+  (overrideFile as { map?: Record<string, { productNo: number; sampleName: string }> }).map ?? {};
 
 /** 공백·대소문자·괄호를 지워 비교한다. 몰에 등록된 이름이 조금 달라도 잡히게. */
 function normalize(name: string) {
@@ -31,6 +38,21 @@ async function buildPlan() {
   if (error) throw new Error(`상품 조회 실패: ${error.message}`);
 
   const matches = (local ?? []).map((row) => {
+    // 수동 매핑이 이름 매칭보다 우선한다.
+    const manual = OVERRIDE[row.id];
+    if (manual) {
+      const found = remote.find((item) => item.product_no === manual.productNo);
+      return {
+        id: row.id,
+        ticker: row.ticker,
+        name: row.name,
+        currentProductNo: row.cafe24_product_no,
+        matchedProductNo: found ? manual.productNo : null,
+        matchedName: found?.product_name ?? `(몰에 ${manual.productNo}번 없음)`,
+        confidence: found ? "manual" : "none",
+      };
+    }
+
     const target = normalize(row.name);
     const exact = remote.find((item) => normalize(item.product_name) === target);
     // 정확히 안 맞으면 한쪽이 다른 쪽을 포함하는지 본다
