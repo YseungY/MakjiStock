@@ -15,6 +15,7 @@ import {
   fxLabel,
   linePath,
   seriesAt,
+  surgeOf,
   makjiIndexAt,
   makjiIndexOf,
   predictBreadOf,
@@ -204,10 +205,8 @@ export function MarketPanel() {
   const idxD = idxT - idxPrev;
   const fx = fxDropOf(todayKey);
   const caps = BREADS.filter((b) => quoteAt(b, todayKey, session).total >= CAP_TOTAL - 0.01).length;
-  /* 급등주 — 검색지수가 가장 높은 한 종.
-     검색 할인 = 검색지수 × 0.145 이므로 검색으로 가장 많이 깎인 상품과 같다. */
-  const surge = BREADS.map((b) => ({ b, q: quoteAt(b, todayKey, session) }))
-    .sort((x, y) => y.q.searchIdx - x.q.searchIdx)[0];
+  // 급등주 — 전일 대비 검색지수가 가장 많이 오른 한 종. 아무도 안 올랐으면 없다.
+  const surge = surgeOf(todayKey, session);
 
   const rows = useMemo(() => {
     void dataVersion; // 실시세가 주입되면 가격·등락이 바뀐다
@@ -279,8 +278,13 @@ export function MarketPanel() {
               <span className="quote__nm">
                 <b>
                   {b.name}
-                  {b.tk === surge.b.tk ? (
-                    <em className="surge" title={`검색지수 ${fixed(surge.q.searchIdx, 1)}`}>급등주</em>
+                  {surge && b.tk === surge.b.tk ? (
+                    <em
+                      className="surge"
+                      title={`검색지수 ${fixed(surge.q.searchIdx, 1)} · 전일 대비 ${signed(surge.q.searchChange, 1)}`}
+                    >
+                      급등주
+                    </em>
                   ) : null}
                 </b>
                 <span><em>{b.tk}</em> 정가 <s className="n">{won(b.base)}원</s></span>

@@ -836,9 +836,10 @@ body{display:grid;place-items:center}
 .calc__step.is-final{border-bottom:none}
 
 /* ========== 급등주 배지 ========== */
+/* 상승색 배경에 흰 글씨. 티커 옆에서 한눈에 잡히게 한다. */
 .surge{
-  display:inline-block;margin-left:5px;padding:1px 6px;border-radius:999px;
-  background:var(--up-soft);color:var(--up);
+  display:inline-block;margin-left:5px;padding:2px 7px;border-radius:999px;
+  background:var(--up);color:#fff;
   font-size:9.5px;font-weight:800;font-style:normal;letter-spacing:-.02em;
-  vertical-align:middle;
+  vertical-align:middle;line-height:1.2;
 }

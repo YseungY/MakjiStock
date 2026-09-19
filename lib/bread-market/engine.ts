@@ -240,13 +240,38 @@ export function hydrateQuotes(rows: RealQuoteRow[]) {
       fxAt: row.fxCurrentDate,
       fxDisc: row.fxDiscountPct,
       searchIdx: row.searchRatio,
-      searchChange: 0,
+      searchChange: 0, // 아래에서 전일 대비로 채운다
       searchDisc: row.searchDiscountPct,
       total: row.discountPct,
       price: row.priceWon,
       vsBase: ((row.priceWon - row.basePriceWon) / row.basePriceWon) * 100,
     });
   }
+
+  /* 전일 대비 검색지수 변화. 급등주 판정에 쓴다.
+     API 는 그날 값만 주므로 저장한 뒤 이웃 날짜를 보고 채운다. */
+  for (const row of rows) {
+    const key = realKey(row.ticker, row.publishDate, row.session);
+    const quote = realQuotes.get(key);
+    if (!quote) continue;
+    const previous = realQuotes.get(realKey(row.ticker, addDays(row.publishDate, -1), "am"));
+    if (previous) quote.searchChange = quote.searchIdx - previous.searchIdx;
+  }
+}
+
+/**
+ * 급등주 — 전일 대비 검색지수가 가장 많이 오른 한 종. 오른 것만 본다.
+ *
+ * 검색지수를 상품끼리 직접 비교하지 않는다. 각 상품이 자기 90일 최고치를
+ * 100으로 잡은 상댓값이라 87 과 44 는 "누가 더 검색됐나"가 아니다 (PRD §7).
+ * 변화량은 자기 자신과의 비교라 이 문제가 없다.
+ */
+export function surgeOf(key: string, session: PriceSession) {
+  const risen = BREADS.map((b) => ({ b, q: quoteAt(b, key, session) })).filter(
+    (x) => x.q.searchChange > 0,
+  );
+  if (risen.length === 0) return null;
+  return risen.sort((x, y) => y.q.searchChange - x.q.searchChange)[0];
 }
 
 export function hasRealData() {
