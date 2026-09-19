@@ -39,16 +39,34 @@ function authorized(request: Request) {
   return Boolean(secret) && request.headers.get("authorization") === `Bearer ${secret}`;
 }
 
-/** KST 시각으로 지금이 오전장인지 오후장인지 정한다 (PRD §2). */
-function currentSession(): "am" | "pm" {
-  const hour = Number(
+function kstHour(): number {
+  return Number(
     new Intl.DateTimeFormat("en-GB", {
       timeZone: "Asia/Seoul",
       hour: "2-digit",
       hour12: false,
     }).format(new Date()),
   );
-  return hour >= 16 ? "pm" : "am";
+}
+
+/* 어느 장의 가격을 만들지 정한다.
+   1) ?session= 이 있으면 그대로
+   2) Vercel 크론이면 x-vercel-cron-schedule 헤더로 판별한다.
+      Hobby 는 지정 시각이 아니라 그 시간대 안 아무 때나 실행하므로
+      (05:55 로 걸어도 05:00~05:59 사이) 현재 시각으로는 구분할 수 없다.
+   3) 그 외에는 KST 시각으로 추정한다 */
+function resolveSession(request: Request, param: string | null): "am" | "pm" {
+  if (param === "am" || param === "pm") return param;
+
+  const schedule = request.headers.get("x-vercel-cron-schedule");
+  if (schedule) {
+    // UTC 시(hour) 필드. 20시대=05시대 KST(오전장 준비), 6시대=15시대 KST(오후장 준비)
+    const utcHour = Number(schedule.trim().split(/\s+/)[1]);
+    if (Number.isFinite(utcHour)) return utcHour === 6 ? "pm" : "am";
+  }
+
+  const hour = kstHour();
+  return hour >= 15 && hour < 24 ? "pm" : "am";
 }
 
 /* 마진이 허용하는 최대 할인율.
@@ -62,17 +80,26 @@ function marginCapPct(product: ProductRow, policyCap: number): number {
   return Math.min(policyCap, d);
 }
 
+/* Vercel 크론은 GET 으로 호출하고 CRON_SECRET 을 Authorization 헤더로 보낸다.
+   크론 호출은 반영까지 하는 것이 목적이므로 commit 을 기본값으로 둔다. */
+export async function GET(request: Request) {
+  return run(request, { defaultCommit: true });
+}
+
 export async function POST(request: Request) {
+  return run(request, { defaultCommit: false });
+}
+
+async function run(request: Request, { defaultCommit }: { defaultCommit: boolean }) {
   if (!authorized(request)) {
     return Response.json({ error: "unauthorized" }, { status: 401 });
   }
 
   const url = new URL(request.url);
   const publishDate: string = url.searchParams.get("date") ?? kstToday();
-  const sessionParam = url.searchParams.get("session");
-  const session: "am" | "pm" =
-    sessionParam === "am" || sessionParam === "pm" ? sessionParam : currentSession();
-  const commit = url.searchParams.get("commit") === "1";
+  const session = resolveSession(request, url.searchParams.get("session"));
+  const commitParam = url.searchParams.get("commit");
+  const commit = commitParam === null ? defaultCommit : commitParam === "1";
 
   const { formulaVersion = "v0.7", ...pricing } = pricingConfig.pricing as PricingConfig & {
     formulaVersion?: string;
@@ -332,6 +359,7 @@ export async function POST(request: Request) {
 
     return Response.json({
       mode: commit ? "committed" : "dry-run",
+      trigger: request.headers.get("x-vercel-cron-schedule") ?? "manual",
       publishDate,
       session,
       formulaVersion,
