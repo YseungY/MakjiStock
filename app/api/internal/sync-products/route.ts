@@ -1,4 +1,4 @@
-import { cafe24Request } from "@/lib/cafe24/client";
+import { cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /* Cafe24 상품 목록을 읽어 products.cafe24_product_no 를 채운다.
@@ -20,10 +20,9 @@ function normalize(name: string) {
 }
 
 async function buildPlan() {
-  const shopNo = Number(process.env.CAFE24_SHOP_NO ?? 1);
-  const { products: remote } = await cafe24Request<{ products: Cafe24Product[] }>(
-    `/api/v2/admin/products?shop_no=${shopNo}&limit=100&fields=product_no,product_name,price`,
-  );
+  const shopNo = cafe24ShopNo();
+  const requestPath = `/api/v2/admin/products?shop_no=${shopNo}&limit=100&fields=product_no,product_name,price`;
+  const { products: remote = [] } = await cafe24Request<{ products?: Cafe24Product[] }>(requestPath);
 
   const { data: local, error } = await supabaseAdmin()
     .from("products")
@@ -55,6 +54,8 @@ async function buildPlan() {
   const usedNos = new Set(matches.map((m) => m.matchedProductNo).filter(Boolean));
   return {
     shopNo,
+    requestPath,
+    cafe24ProductCount: remote.length,
     cafe24Products: remote.map((item) => ({
       product_no: item.product_no,
       product_name: item.product_name,

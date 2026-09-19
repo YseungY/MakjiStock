@@ -28,6 +28,13 @@ export function cafe24Env() {
   return { mallId, clientId, clientSecret };
 }
 
+/* 빈 문자열은 ?? 를 통과한다. Number("") 는 0 이고 Cafe24 는 shop_no=0 에
+   빈 목록을 돌려준다 — 오류가 아니라 조용히 아무것도 안 나온다.
+   || 로 받아 0·NaN·빈값을 모두 1 로 떨어뜨린다. */
+export function cafe24ShopNo(): number {
+  return Number(process.env.CAFE24_SHOP_NO) || 1;
+}
+
 export function cafe24RedirectUri() {
   const base =
     process.env.CAFE24_REDIRECT_BASE_URL ??

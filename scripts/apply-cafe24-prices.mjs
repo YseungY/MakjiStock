@@ -59,7 +59,8 @@ async function main() {
 
   await loadEnvFile(path.resolve(args["env-file"] ?? ".env"));
   const report = JSON.parse(await readFile(path.resolve(args.input), "utf8"));
-  const shopNo = Number(args["shop-no"] ?? process.env.CAFE24_SHOP_NO ?? 1);
+  // 빈 문자열은 ?? 를 통과해 Number("")=0 이 된다. || 로 1 로 떨어뜨린다.
+  const shopNo = Number(args["shop-no"] || process.env.CAFE24_SHOP_NO) || 1;
   const priceField = args["price-field"] ?? "price";
   const commit = args.commit === true;
 
