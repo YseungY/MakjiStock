@@ -110,7 +110,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
   const commitParam = url.searchParams.get("commit");
   const commit = commitParam === null ? defaultCommit : commitParam === "1";
 
-  const { formulaVersion = "v0.7", ...pricing } = pricingConfig.pricing as PricingConfig & {
+  const { formulaVersion = "v1.0", ...pricing } = pricingConfig.pricing as PricingConfig & {
     formulaVersion?: string;
   };
   const db = supabaseAdmin();

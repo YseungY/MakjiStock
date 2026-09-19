@@ -95,8 +95,8 @@ create table daily_prices (
   fx_decline_pct      numeric(8,5) not null,
   fx_discount_pct     numeric(6,3) not null,
 
-  -- 할증을 허용하므로 음수가 될 수 있다. 하한 -10 = 정가의 110% 상한.
-  discount_pct        numeric(6,3) not null check (discount_pct between -10 and 38),
+  -- 산식 v1.0: 0~38. 정가를 넘지 않는다(할증 없음).
+  discount_pct        numeric(6,3) not null check (discount_pct between 0 and 38),
   base_price_won      integer not null,
   price_won           integer not null check (price_won > 0 and price_won % 10 = 0),
   previous_price_won  integer,
@@ -204,8 +204,8 @@ create table prediction_entries (
   submitted_at        timestamptz not null default now(),
   result_price_won    integer,
   result              entry_result not null default 'pending',
-  -- 일반 적중 3, 구매자 적중 7, 구매자 미적중 3(재도전), 무효 3
-  reward_rate_pct     smallint not null default 0 check (reward_rate_pct in (0,3,7)),
+  -- 적중·무승부 5, 빗나감 0 (lib/bread-market/reward-policy.ts)
+  reward_rate_pct     smallint not null default 0 check (reward_rate_pct in (0,5)),
   resolved_at         timestamptz,
   check ((role = 'general' and round_id is not null)
       or (role = 'buyer'   and purchase_id is not null))

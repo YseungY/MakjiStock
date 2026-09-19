@@ -36,7 +36,7 @@ export function sessionOfHour(hour: number): Session {
 
 export const REWARD_RATE_PCT: Record<Outcome, number> = { hit: 5, miss: 0, void: 5 };
 
-/** 판매가 할인율 D(%) — 10원 반올림 후 실제 판매가로 다시 계산합니다. 할증이면 음수. */
+/** 판매가 할인율 D(%) — 10원 반올림 후 실제 판매가로 다시 계산합니다. 정가를 넘지 않아 0 이상. */
 export function saleDiscountPct(salePriceWon: number, basePriceWon: number) {
   return (1 - salePriceWon / basePriceWon) * 100;
 }

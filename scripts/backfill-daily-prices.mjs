@@ -1,6 +1,6 @@
 /* 백테스트 결과(backtest/output 아래 daily.csv)를 daily_prices 에 채운다.
    화면의 91일 추이 차트가 실데이터를 그리려면 과거가 필요하다.
-   산식이 같으므로(v0.7) 오늘 계산되는 값과 이어진다.
+   산식이 같으므로(v1.0) 오늘 계산되는 값과 이어진다.
 
    사용: node scripts/backfill-daily-prices.mjs --input <daily.csv> [--commit] */
 import { readFile } from "node:fs/promises";
@@ -62,7 +62,7 @@ async function main() {
       publish_date: r.publishDate,
       price_session: SESSION[r.priceSession],
       signal_date: r.searchSignalDate,
-      formula_version: "v0.7",
+      formula_version: "v1.0",
       search_ratio: Math.abs(Number(r.searchRatio)),
       search_discount_pct: Number(r.searchCouponPct),
       fx_previous_date: r.fxPreviousDate,

@@ -109,7 +109,7 @@ export async function POST(request: Request) {
 
   const db = supabaseAdmin();
   const formulaVersion =
-    (pricingConfig.pricing as { formulaVersion?: string }).formulaVersion ?? "v0.7";
+    (pricingConfig.pricing as { formulaVersion?: string }).formulaVersion ?? "v1.0";
 
   // 화면은 티커로 생각한다. 상품 id 는 서버가 찾는다.
   const productId = body.productId ?? (await tickerToProductId(body.ticker!));

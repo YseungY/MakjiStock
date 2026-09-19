@@ -172,7 +172,7 @@ GET /api/products/{productId}?historyDays=14
 
 3. 서버는 상품 기준정보, 오늘 확정가, 직전 확정가, 14일 가격 이력을 반환한다.
 4. 전일 대비 금액과 등락률은 저장된 두 확정가로 계산하거나 저장값을 사용한다.
-5. 검색쿠폰, 환율 조정, 최종 할인·할증률, 실제 데이터 기준일을 표시한다.
+5. 검색쿠폰, 환율 조정, 최종 할인율(0~38%, 정가 초과 없음), 실제 데이터 기준일을 표시한다.
 6. 사용자는 지정가 알림 또는 Cafe24 구매 이동을 선택한다.
 
 ```json
@@ -197,7 +197,7 @@ GET /api/products/{productId}?historyDays=14
     "searchSignalDate": "2026-09-15",
     "fxCurrentDate": "2026-09-15",
     "fxPreviousDate": "2026-09-14",
-    "formulaVersion": "v5-search-absolute-0.10_fx-0.28-scale-50_fx-cap-28_total-cap-38_close-open"
+    "formulaVersion": "v1.0"
   },
   "history": []
 }

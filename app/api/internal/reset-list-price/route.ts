@@ -55,7 +55,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       target_date: targetDate,
       price_session: "list",
       status: "applying_cafe24",
-      formula_version: "v0.7",
+      formula_version: "v1.0",
     })
     .select("id")
     .single();

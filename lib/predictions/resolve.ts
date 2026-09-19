@@ -96,7 +96,7 @@ export async function resolvePredictions({
       continue;
     }
 
-    await db
+    const { error: updateError } = await db
       .from("prediction_entries")
       .update({
         result: outcome,
@@ -105,6 +105,11 @@ export async function resolvePredictions({
         resolved_at: new Date().toISOString(),
       })
       .eq("id", entry.id);
+    // 판정이 저장되지 않았으면 쿠폰도 내지 않는다. pending 으로 남아 다음 실행에서 다시 본다.
+    if (updateError) {
+      out.push({ ...base, amountWon: 0, code: "none", reason: `판정 저장 실패: ${updateError.message}` });
+      continue;
+    }
 
     if (amount <= 0 || !entry.products?.cafe24_product_no) {
       out.push({
