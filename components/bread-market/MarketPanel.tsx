@@ -45,18 +45,13 @@ const SORTS: { id: Sort; label: string }[] = [
 /* 막지지수 91일 추이 — 기획안 백테스트 검증 기간과 같은 길이 */
 function IndexDash({
   todayKey,
-  dataVersion,
   compact = false,
 }: {
   todayKey: string;
-  dataVersion: number;
   /** 히어로 박스 안에서는 지수 값이 바로 옆에 이미 있어 머리말을 뺀다. */
   compact?: boolean;
 }) {
   const { keys, vals } = useMemo(() => {
-    /* 시세는 engine 의 모듈 저장소에 있어 이 함수의 인자로 들어오지 않는다.
-       dataVersion 을 읽어 두어야 실시세가 주입됐을 때 다시 계산된다. */
-    void dataVersion;
     const keys: string[] = [];
     const vals: number[] = [];
     for (let i = 90; i >= 0; i--) {
@@ -65,7 +60,7 @@ function IndexDash({
       vals.push(makjiIndexOf(k));
     }
     return { keys, vals };
-  }, [todayKey, dataVersion]);
+  }, [todayKey]);
   const W = 300;
   const H = compact ? 58 : 86;
   const P = 4;
@@ -190,7 +185,7 @@ function LockCard({ todayKey }: { todayKey: string }) {
 }
 
 export function MarketPanel() {
-  const { todayKey, openSheet, dataVersion, predictions } = useBreadMarket();
+  const { todayKey, openSheet, predictions } = useBreadMarket();
   const now = useSession();
   const { session } = now;
   const my = useBreadState();
@@ -205,13 +200,12 @@ export function MarketPanel() {
   const surge = listTime ? null : surgeOf(todayKey, session);
 
   const rows = useMemo(() => {
-    void dataVersion; // 실시세가 주입되면 가격·등락이 바뀐다
     const arr = BREADS.map((b) => ({ b, q: quoteAt(b, todayKey, session), d: changeAt(b, todayKey, session) }));
     if (sort === "drop") arr.sort((x, y) => x.d.pct - y.d.pct);
     if (sort === "price") arr.sort((x, y) => y.q.price - x.q.price);
     if (sort === "name") arr.sort((x, y) => x.b.name.localeCompare(y.b.name, "ko"));
     return arr;
-  }, [sort, todayKey, session, dataVersion]);
+  }, [sort, todayKey, session]);
 
   const pb = predictBreadOf(todayKey);
   const pq = quoteAt(pb, todayKey, session);
@@ -255,7 +249,7 @@ export function MarketPanel() {
               )}
             </div>
           </div>
-          <IndexDash todayKey={todayKey} dataVersion={dataVersion} compact />
+          <IndexDash todayKey={todayKey} compact />
         </div>
         <p className="mkthead__note">
           {listTime ? (
@@ -320,7 +314,7 @@ export function MarketPanel() {
                 </span>
               </button>
               <button className="quote__rt" onClick={() => openSheet({ type: "detail", tk: b.tk })} aria-label={`${b.name} ${won(q.price)}원 상세 보기`}>
-                <b className="quote__p n"><RollingNumber value={q.price} ready={dataVersion > 0} /></b>
+                <b className="quote__p n"><RollingNumber value={q.price} /></b>
                 {listTime ? (
                   <em className="quote__d flat">정가</em>
                 ) : (

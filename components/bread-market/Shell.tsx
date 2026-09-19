@@ -10,19 +10,17 @@ import {
   cls,
   fixed,
   fxShownAt,
-  hydrateIndex,
-  hydrateQuotes,
+  hydrateMarket,
   labelOf,
   makjiIndexAt,
   quoteAt,
   shortOf,
   signed,
   won,
-  type RealIndexRow,
-  type RealQuoteRow,
 } from "@/lib/bread-market/engine";
+import type { MarketData } from "@/lib/bread-market/market-data";
 import { SESSION_LABEL, SESSION_RANGE, type Session } from "@/lib/bread-market/reward-policy";
-import { useSession, useTodayKey, syncLockFromServer } from "@/lib/bread-market/store";
+import { seedClock, useSession, useTodayKey, syncLockFromServer } from "@/lib/bread-market/store";
 import {
   BreadMarketContext,
   type BreadMarketCtx as Ctx,
@@ -120,14 +118,25 @@ function Tape({ todayKey, session }: { todayKey: string; session: Session }) {
   );
 }
 
-export function BreadMarketShell({ children }: { children: React.ReactNode }) {
-  const todayKey = useTodayKey();
+export function BreadMarketShell({ clock, market, children }: {
+  /** 서버가 잰 KST 시각. SSR 과 하이드레이션이 같은 날짜·장을 보게 한다. */
+  clock: { todayKey: string; hour: number };
+  /** 서버가 받아 온 시세. Supabase 가 안 되면 null 이고 화면은 시드로 돈다. */
+  market: MarketData | null;
+  children: React.ReactNode;
+}) {
+  /* 자식이 읽기 전에 심는다. 렌더 중 호출이지만 같은 값을 다시 넣는 것뿐이라
+     몇 번 돌아도 결과가 같다. effect 로 미루면 그 사이 한 프레임 동안 시드
+     값이 보인다 — 그게 없애려던 것이다. */
+  seedClock(clock.todayKey, clock.hour);
+  if (market) hydrateMarket(market);
+
+  const todayKey = useTodayKey() ?? clock.todayKey;
   const pathname = usePathname();
   const { session } = useSession();
   const [sheet, setSheet] = useState<SheetState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [dataVersion, setDataVersion] = useState(0);
   const [predictions, setPredictions] = useState<ServerPrediction[]>([]);
 
   const refreshPredictions = useCallback(() => {
@@ -149,29 +158,6 @@ export function BreadMarketShell({ children }: { children: React.ReactNode }) {
       })
       .catch(() => {});
   }, [refreshPredictions]);
-
-  /* Supabase 에 저장된 실제 시세를 받아 engine 에 주입한다.
-     받기 전에는 판매가 자리가 비어 있고, 받은 뒤 리렌더되며 실값이 굴러 들어온다.
-     실패해도 화면은 시드로 계속 돈다 — 시세가 안 보이는 것보다 낫다. */
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/market")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((data: { quotes?: RealQuoteRow[]; indexSeries?: RealIndexRow[] }) => {
-        if (!alive) return;
-        if (data.quotes?.length) hydrateQuotes(data.quotes);
-        if (data.indexSeries?.length) hydrateIndex(data.indexSeries);
-      })
-      .catch(() => {})
-      /* 성공이든 실패든 한 번은 올린다. 화면은 "시세가 정해졌다"를 이걸로 알고
-         그제서야 숫자를 굴린다 — 안 올리면 시세가 영영 자리를 못 잡는다. */
-      .finally(() => {
-        if (alive) setDataVersion((n) => n + 1);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
 
   /* 탭 이동 시 스크롤 맨 위로. 단 #앵커로 왔으면 그 자리로 보낸다.
      스크롤 컨테이너가 따로 있어 브라우저 기본 해시 이동이 듣지 않는다.
@@ -208,9 +194,9 @@ export function BreadMarketShell({ children }: { children: React.ReactNode }) {
   const ctx = useMemo<Ctx | null>(
     () =>
       todayKey
-        ? { todayKey, dataVersion, predictions, refreshPredictions, openSheet: setSheet, toast }
+        ? { todayKey, predictions, refreshPredictions, openSheet: setSheet, toast }
         : null,
-    [todayKey, dataVersion, predictions, refreshPredictions, toast],
+    [todayKey, predictions, refreshPredictions, toast],
   );
 
   const activeIdx = Math.max(0, TABS.findIndex((t) => pathname?.startsWith(t.href)));

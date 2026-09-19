@@ -7,7 +7,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { kstTodayKey } from "./engine";
+import { kstHour, kstTodayKey } from "./engine";
 import { sessionOfHour, type Session } from "./reward-policy";
 
 export type PriceLock = {
@@ -106,7 +106,18 @@ export function resetBreadState() {
 }
 
 /* ───────── 오늘 날짜·시각 (KST) ─────────
-   서버 렌더 시점엔 null → 브라우저에서 확정. 정적 빌드 날짜로 고정되는 것을 막습니다. */
+   서버 렌더가 자기 시각을 심고(seedClock), SSR 과 하이드레이션이 같은 값을 봅니다.
+   심지 않으면 화면은 날짜를 모른 채 "불러오는 중"만 그리고, 하이드레이션이
+   끝난 다음에야 목록이 뜹니다 — 그 한 박자가 시드 값이 보이던 구간입니다.
+   심은 값은 모든 요청이 Date.now() 로 똑같이 계산한 값이라 서로 덮어써도 같습니다. */
+let ssrTodayKey: string | null = null;
+let ssrHour = 10;
+
+export function seedClock(todayKey: string, hour: number) {
+  ssrTodayKey = todayKey;
+  ssrHour = hour;
+}
+
 function subscribeMinute(fn: () => void) {
   let interval: number | undefined;
   const delay = 60_000 - (Date.now() % 60_000) + 50;
@@ -131,12 +142,8 @@ export function useTodayKey() {
       }
       return today;
     },
-    () => null,
+    () => ssrTodayKey,
   );
-}
-
-function kstHour() {
-  return new Date(Date.now() + 9 * 3600000).getUTCHours();
 }
 
 function useKstHour() {
@@ -151,7 +158,7 @@ function useKstHour() {
       }
       return kstHour();
     },
-    () => 10,
+    () => ssrHour,
   );
 }
 

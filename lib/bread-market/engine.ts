@@ -153,6 +153,12 @@ export function kstTodayKey() {
   return keyOfMs(Date.now() + KST - 2 * 3600000);
 }
 
+/** 지금 KST 몇 시인가. 어느 장인지는 이걸로만 정한다.
+    서버 렌더도 써야 해서 store("use client") 가 아니라 여기 둔다. */
+export function kstHour() {
+  return new Date(Date.now() + KST).getUTCHours();
+}
+
 export function addDays(key: string, n: number) {
   return keyOfMs(msOf(key) + n * DAY);
 }
@@ -283,6 +289,17 @@ export type RealIndexRow = { publishDate: string; session: "am" | "pm"; index: n
 
 export function hydrateIndex(rows: RealIndexRow[]) {
   for (const row of rows) realIndex.set(`${row.publishDate}|${row.session}`, row.index);
+}
+
+/** 서버가 준 한 벌을 통째로 심는다. 렌더 중에 불러야 해서 — effect 로 미루면
+    그 한 프레임 동안 시드 값이 보인다 — 같은 응답이면 두 번째부터는 그냥 돌아온다. */
+let hydratedStamp = "";
+export function hydrateMarket(data: { quotes: RealQuoteRow[]; indexSeries: RealIndexRow[] }) {
+  const stamp = `${data.quotes.length}|${data.quotes.at(-1)?.publishDate ?? ""}|${data.indexSeries.length}`;
+  if (stamp === hydratedStamp) return;
+  hydratedStamp = stamp;
+  hydrateQuotes(data.quotes);
+  hydrateIndex(data.indexSeries);
 }
 
 export function hasRealData() {
