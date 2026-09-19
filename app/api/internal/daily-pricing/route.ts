@@ -277,7 +277,10 @@ export async function POST(request: Request) {
           applied.push({ ticker: product.ticker, result: "skipped", reason: "cafe24_product_no 없음" });
           continue;
         }
-        const path = `/api/v2/admin/products/${product.cafe24_product_no}?shop_no=${shopNo}`;
+        /* Cafe24 는 POST·PUT 에 쿼리스트링을 허용하지 않는다.
+           400 "Query String is not available for POST, PUT Method."
+           shop_no 는 body 로만 보낸다. */
+        const path = `/api/v2/admin/products/${product.cafe24_product_no}`;
         try {
           /* 계산된 가격을 항상 PUT 한다. GET 으로 현재가를 먼저 보던 방식은
              호출이 2번이고, 같은 값이면 PUT 이 어차피 무해하다.
