@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
-import { fetchUsdKrwClosingRates } from "../backtest/lib/fx.mjs";
+import { fetchUsdKrwClosingRates } from "../lib/pricing/fx.mjs";
 import {
   addDays,
   buildFxSignals,

@@ -5,13 +5,13 @@ import {
   ECOS_USD_KRW_OPEN,
   parseEcosClosingRates,
   parseEcosRates,
-} from "../lib/fx.mjs";
-import { fetchTrendsSeparately } from "../lib/naver.mjs";
+} from "../../lib/pricing/fx.mjs";
+import { fetchTrendsSeparately } from "../../lib/pricing/naver.mjs";
 import {
   buildSessionFxSignals,
   calculateDay,
   simulateProductSessions,
-} from "../lib/pricing.mjs";
+} from "../../lib/pricing/pricing.mjs";
 
 const pricing = {
   fxWeight: 0.28,
