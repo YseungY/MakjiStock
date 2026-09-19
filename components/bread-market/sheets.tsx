@@ -2,7 +2,6 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  SHOP_URL,
   breadOf,
   changeAt,
   cls,
@@ -140,7 +139,8 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
         </button>
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 11, fontWeight: 700 }}>
-        <a href={SHOP_URL} target="_blank" rel="noopener noreferrer" style={{ color: "var(--ink-3)" }}>막지 자사몰 상품 보기 →</a>
+        {/* 구매 버튼과 같은 경로를 쓴다. 어느 몰로 갈지는 서버가 정한다. */}
+        <a href={`/api/out/cafe24/${b.tk}`} target="_blank" rel="noopener noreferrer" style={{ color: "var(--ink-3)" }}>이 상품 보러 가기 →</a>
       </div>
     </div>
   );
