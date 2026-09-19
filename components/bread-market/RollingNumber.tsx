@@ -6,6 +6,10 @@ import { won } from "@/lib/bread-market/engine";
 /* 시세가 처음 뜰 때 숫자가 굴러가며 자리를 잡는다. 주식 호가창처럼
    "지금 막 정해진 값"이라는 느낌을 준다.
 
+   ready 는 "실시세를 다 받았는가". 받기 전에 굴리면 시드 값 위에서 굴러가다
+   실값으로 툭 갈린다 — 예전 가격이 잠깐 보이는 게 그거다. 그래서 다 받을
+   때까지는 자리만 잡아 두고, 값이 정해진 다음에 굴린다.
+
    굴러가는 동안의 값만 상태로 둔다(rolling). 평소에는 value 를 그대로 그려서
    effect 안에서 상태를 동기로 바꾸지 않는다.
    접근성 설정에서 동작 줄이기를 켠 사람에게는 굴리지 않는다. */
@@ -13,7 +17,15 @@ import { won } from "@/lib/bread-market/engine";
 const DURATION_MS = 1100;
 const UNIT = 10; // 판매가는 10원 단위다
 
-export function RollingNumber({ value, className }: { value: number; className?: string }) {
+export function RollingNumber({
+  value,
+  ready = true,
+  className,
+}: {
+  value: number;
+  ready?: boolean;
+  className?: string;
+}) {
   const [rolling, setRolling] = useState<number | null>(null);
   /* "끝났는가"를 기록한다. "시작했는가"로 잠그면 StrictMode 에서 죽는다 —
      개발 모드는 effect 를 두 번 돌리는데, 첫 번째가 잠그고 정리에서 프레임을
@@ -21,8 +33,8 @@ export function RollingNumber({ value, className }: { value: number; className?:
   const done = useRef(false);
 
   useEffect(() => {
-    // 첫 등장에만 굴린다. 이후 값이 바뀌면 그대로 갈아끼운다.
-    if (done.current) return;
+    // 시세를 다 받은 뒤 한 번만 굴린다. 이후 값이 바뀌면 그대로 갈아끼운다.
+    if (!ready || done.current) return;
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       done.current = true;
       return;
@@ -50,11 +62,16 @@ export function RollingNumber({ value, className }: { value: number; className?:
     frame = requestAnimationFrame(tick);
     // done 을 그대로 두어 StrictMode 두 번째 마운트가 다시 시작하게 한다.
     return () => cancelAnimationFrame(frame);
-  }, [value]);
+  }, [ready, value]);
 
   return (
     <span className={className} style={{ fontVariantNumeric: "tabular-nums" }}>
-      {won(rolling ?? value)}원
+      {ready ? (
+        <>{won(rolling ?? value)}원</>
+      ) : (
+        /* 아직 시세 전 — 자리만 잡아 둔다. 시드 값을 보여주면 그게 "예전 가격"이다. */
+        <span style={{ opacity: 0.35 }}>―원</span>
+      )}
     </span>
   );
 }

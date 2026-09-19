@@ -151,19 +151,23 @@ export function BreadMarketShell({ children }: { children: React.ReactNode }) {
   }, [refreshPredictions]);
 
   /* Supabase 에 저장된 실제 시세를 받아 engine 에 주입한다.
-     받기 전에는 시드 값이 보이고, 받은 뒤 리렌더되며 실값으로 바뀐다.
+     받기 전에는 판매가 자리가 비어 있고, 받은 뒤 리렌더되며 실값이 굴러 들어온다.
      실패해도 화면은 시드로 계속 돈다 — 시세가 안 보이는 것보다 낫다. */
   useEffect(() => {
     let alive = true;
     fetch("/api/market")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((data: { quotes?: RealQuoteRow[]; indexSeries?: RealIndexRow[] }) => {
-        if (!alive || !data.quotes?.length) return;
-        hydrateQuotes(data.quotes);
+        if (!alive) return;
+        if (data.quotes?.length) hydrateQuotes(data.quotes);
         if (data.indexSeries?.length) hydrateIndex(data.indexSeries);
-        setDataVersion((n) => n + 1);
       })
-      .catch(() => {});
+      .catch(() => {})
+      /* 성공이든 실패든 한 번은 올린다. 화면은 "시세가 정해졌다"를 이걸로 알고
+         그제서야 숫자를 굴린다 — 안 올리면 시세가 영영 자리를 못 잡는다. */
+      .finally(() => {
+        if (alive) setDataVersion((n) => n + 1);
+      });
     return () => {
       alive = false;
     };

@@ -320,7 +320,7 @@ export function MarketPanel() {
                 </span>
               </button>
               <button className="quote__rt" onClick={() => openSheet({ type: "detail", tk: b.tk })} aria-label={`${b.name} ${won(q.price)}원 상세 보기`}>
-                <b className="quote__p n"><RollingNumber value={q.price} /></b>
+                <b className="quote__p n"><RollingNumber value={q.price} ready={dataVersion > 0} /></b>
                 {listTime ? (
                   <em className="quote__d flat">정가</em>
                 ) : (
