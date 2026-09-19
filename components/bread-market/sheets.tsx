@@ -232,11 +232,35 @@ export function LockSheet({ tk, onClose }: { tk: string; onClose: () => void }) 
   const q = quoteAt(b, todayKey, session);
   const protection = lockProtection(session);
 
-  function confirm() {
-    if (!protection) return;
-    lockPrice({ tk: b.tk, lockedPrice: q.price, session, dateKey: todayKey });
-    toast("🔒", `${b.name} ${won(q.price)}원 잠금`, `${protection.label} 잠금가로 살 수 있어요`);
-    onClose();
+  const [pending, setPending] = useState(false);
+
+  /* 잠금은 서버가 확정한다. 하루 1회 제한을 브라우저에서 막으면 쿠키만 지워도
+     뚫린다. 잠금가도 서버가 daily_prices 에서 읽는다 — 값을 보내게 하면
+     원하는 가격에 잠글 수 있다.
+     localStorage 는 서버가 받아준 뒤에만 따라 쓴다. */
+  async function confirm() {
+    if (!protection || pending) return;
+    setPending(true);
+    try {
+      const response = await fetch("/api/locks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ticker: b.tk }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        toast("⚠️", "잠금하지 못했어요", payload.error ?? "잠시 후 다시 시도해주세요");
+        return;
+      }
+      const lockedPrice = payload.lock.locked_price_won as number;
+      lockPrice({ tk: b.tk, lockedPrice, session, dateKey: todayKey });
+      toast("🔒", `${b.name} ${won(lockedPrice)}원 잠금`, `${protection.label} 잠금가로 살 수 있어요`);
+      onClose();
+    } catch {
+      toast("⚠️", "잠금하지 못했어요", "네트워크 상태를 확인해주세요");
+    } finally {
+      setPending(false);
+    }
   }
 
   return (
@@ -260,7 +284,7 @@ export function LockSheet({ tk, onClose }: { tk: string; onClose: () => void }) 
           : "자정 이후 정가 시간(00:00~04:59)에도 잠금가로 살 수 있어요. 05시대는 정가 리셋 시간이에요."}
         <br />잠금가는 주문서에 입력하는 1회용 할인코드로 적용돼요.
       </p>
-      <button className="btn btn--blue" disabled={!protection} onClick={confirm}>이 가격 잠그기</button>
+      <button className="btn btn--blue" disabled={!protection || pending} onClick={confirm}>{pending ? "잠그는 중…" : "이 가격 잠그기"}</button>
     </Sheet>
   );
 }
