@@ -1,0 +1,27 @@
+name: CI
+
+# 푸시와 PR 마다 npm test 를 돌린다.
+# test 는 가격·백테스트 테스트 + typecheck + lint 를 묶은 스크립트다 (package.json).
+# 외부 API 키가 필요한 백테스트 실행(npm run backtest)은 여기서 돌리지 않는다.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 연속으로 푸시하면 낡은 실행은 취소한다. 마지막 것만 돌면 된다.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
