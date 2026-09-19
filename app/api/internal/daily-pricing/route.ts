@@ -158,21 +158,40 @@ export async function POST(request: Request) {
       });
     }
 
+    /* D-1 검색지수가 없으면 직전 관측치를 이월한다.
+       0 으로 대체하면 "관심 없음"을 지어내는 셈이라 할인이 사라지고 가격이 뛴다.
+       그렇다고 상품을 통째로 얼리면 멀쩡한 환율 변동이 가격에 반영되지 않는다.
+       환율이 주말에 carriedForward 되는 것과 같은 처리다.
+       이월하면 daily_prices.signal_date 가 D-1 이 아니게 되어 기록에 남는다. */
+    function resolveSearchRatio(productId: string) {
+      const series = trends.seriesByProduct[productId] ?? {};
+      const direct = series[signalDate];
+      if (Number.isFinite(direct)) {
+        return { ratio: Math.abs(direct), sourceDate: signalDate, carried: false };
+      }
+      const observed = Object.keys(series)
+        .filter((date) => date <= signalDate && Number.isFinite(series[date]))
+        .sort();
+      const latest = observed.at(-1);
+      if (!latest) return null;
+      return { ratio: Math.abs(series[latest]), sourceDate: latest, carried: true };
+    }
+
     // ── 계산 ────────────────────────────────────────────────
     const results = rows.map((product) => {
-      const ratio = trends.seriesByProduct[product.id]?.[signalDate];
-      if (!Number.isFinite(ratio)) {
-        // 누락을 0 으로 대체하지 않는다 (PRD §10.3). 직전 가격을 유지한다.
-        return { product, status: "held" as const, reason: "검색지수 없음" };
+      const search = resolveSearchRatio(product.id);
+      if (!search) {
+        // 90일 창 전체에 관측치가 없다. 이월할 값조차 없어 보류한다.
+        return { product, status: "held" as const, reason: "검색지수 관측 이력 없음" };
       }
       const cap = marginCapPct(product, pricing.discountCapPct);
       const calc = calculateDay({
-        searchRatio: Math.abs(ratio),
+        searchRatio: search.ratio,
         fxDeclinePct: fxSignal.declinePct,
         basePriceWon: product.base_price_won,
         pricing: { ...pricing, discountCapPct: cap },
       });
-      return { product, status: "calculated" as const, calc };
+      return { product, status: "calculated" as const, calc, search };
     });
 
     // ── 저장 ────────────────────────────────────────────────
@@ -190,12 +209,12 @@ export async function POST(request: Request) {
     );
 
     await db.from("trend_snapshots").upsert(
-      rows
-        .filter((p) => Number.isFinite(trends.seriesByProduct[p.id]?.[signalDate]))
-        .map((p) => ({
+      results
+        .filter((r) => r.status === "calculated")
+        .map(({ product: p, search }) => ({
           product_id: p.id,
-          signal_date: signalDate,
-          ratio: trends.seriesByProduct[p.id][signalDate],
+          signal_date: search!.sourceDate,
+          ratio: search!.ratio,
           request_start_date: searchStart,
           request_end_date: signalDate,
           keyword_group_version: formulaVersion,
@@ -216,15 +235,16 @@ export async function POST(request: Request) {
       if (!prevByProduct.has(row.product_id)) prevByProduct.set(row.product_id, row.price_won);
     }
 
-    const priceRows = calculated.map(({ product, calc }) => {
+    const priceRows = calculated.map(({ product, calc, search }) => {
       const prev = prevByProduct.get(product.id) ?? null;
       return {
         product_id: product.id,
         publish_date: publishDate,
         price_session: session,
-        signal_date: signalDate,
+        // 이월된 경우 실제로 쓴 날짜가 들어간다. D-1 이 아니면 이월이다.
+        signal_date: search!.sourceDate,
         formula_version: formulaVersion,
-        search_ratio: Math.abs(trends.seriesByProduct[product.id][signalDate]),
+        search_ratio: search!.ratio,
         search_discount_pct: calc!.searchCouponPct,
         fx_previous_date: fxSignal.previousDate,
         fx_current_date: fxSignal.currentDate,
@@ -328,7 +348,10 @@ export async function POST(request: Request) {
               ticker: r.product.ticker,
               name: r.product.name,
               basePriceWon: r.product.base_price_won,
-              searchRatio: Number(Math.abs(trends.seriesByProduct[r.product.id][signalDate]).toFixed(2)),
+              searchRatio: Number(r.search!.ratio.toFixed(2)),
+              ...(r.search!.carried
+                ? { searchCarriedFrom: r.search!.sourceDate }
+                : {}),
               discountPct: Number(r.calc!.discountPct.toFixed(2)),
               priceWon: r.calc!.priceWon,
             }
