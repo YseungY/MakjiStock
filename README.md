@@ -6,7 +6,7 @@
 
 - **왜 만드나** — 할인을 "몇 % 세일"이 아니라 매일 바뀌는 시세로 바꿔서, 오전과 오후에 다시 들어올 이유를 만듭니다.
 - **어떻게 파나** — 계산된 가격은 Cafe24 자사몰 상품가에 그대로 PUT 되고, 결제·회원은 Cafe24가 맡습니다. 이 앱은 가격과 게임만 담당합니다.
-- **누가 쓰나** — 가입 없이 들어오는 모바일 방문자. 식별은 익명 방문자 해시뿐입니다.
+- **누가 쓰나** — 가입 없이 들어오는 모바일 방문자. 둘러보는 동안에는 식별자가 생기지 않습니다. 잠금이나 예측을 처음 누를 때만 `visitor_token` 쿠키(32바이트 난수·HttpOnly·1년)가 발급되고, 서버와 DB는 원문이 아니라 HMAC-SHA256 해시만 다룹니다. (`lib/visitor.ts`)
 
 ## 하루의 구조
 
@@ -81,7 +81,7 @@ DB 스키마는 `supabase/schema.sql`·`supabase/migrations/`·`supabase/rls.sql
 |---|---|
 | `npm run dev` | 개발 서버 |
 | `npm run build` / `npm start` | 프로덕션 빌드·실행 |
-| `npm test` | 가격·백테스트 테스트 + `typecheck` + `lint` |
+| `npm test` | 가격·백테스트 테스트 + `typecheck` + `lint` (CI가 푸시·PR마다 실행) |
 | `npm run test:pricing` | `tests/*.test.mjs` (산식, 세션, 크론, 예측, 보상, 암호화) |
 | `npm run backtest` | 90일 백테스트 실행 → `backtest/output/` |
 | `npm run simulate:pricing` | 산식 파라미터 시뮬레이션 |
@@ -121,6 +121,7 @@ docs/               PRD와 정책 결정 문서
 ## 문서
 
 - [docs/PRD-브레드마켓.md](docs/PRD-브레드마켓.md) — 제품 기준 문서. 충돌하면 이 문서가 우선합니다.
+- [docs/산식과-쿠폰-공부노트.md](docs/산식과-쿠폰-공부노트.md) — 산식·쿠폰을 근거와 코드 위치까지 이어 놓은 노트
 - [DESIGN.md](DESIGN.md) — 브랜드·IA·컴포넌트·접근성 기준
 - [docs/NextJS-Supabase-MARKET-ME-로직구조.md](docs/NextJS-Supabase-MARKET-ME-로직구조.md) — 화면 로직 구현 명세
 - [docs/가격-잠금-1회-사유.md](docs/가격-잠금-1회-사유.md) · [docs/매수가-기준-예측-제외-사유.md](docs/매수가-기준-예측-제외-사유.md) — 범위를 줄인 이유
@@ -130,6 +131,6 @@ docs/               PRD와 정책 결정 문서
 ## 현재 상태
 
 - 버전 `0.1.0`, 비공개 프로젝트. 가격 산식은 v1.0으로 고정, 백테스트로 90일 검증했습니다.
-- `GET /api/me`는 아직 초기 스텁입니다. MY 화면은 서버 렌더 시 `lib/bread-market/page-data.ts`가 잠금·예측을 직접 읽습니다.
+- 화면은 서버 렌더에서 `lib/bread-market/page-data.ts`가 시세·잠금·예측을 직접 읽습니다. 실시세를 하나도 받지 못하면 지어낸 가격 대신 오류를 띄웁니다 — 시드 데이터는 개발 환경에서만 씁니다.
 - 범위 밖: 자체 회원가입·결제, 이메일 지정가 알림, 구매가 기준 예측, 막지코인·배팅류 게임.
 - 미결 항목은 [DESIGN.md](DESIGN.md)의 Open questions와 PRD §24에 있습니다.
