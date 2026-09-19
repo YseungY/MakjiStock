@@ -4,6 +4,7 @@ import { codeExpiry } from "@/lib/bread-market/reward-policy";
 import { issueLockCodes, type IssueResult } from "@/lib/locks/lock-codes";
 import { resolvePredictions, type ResolveResult } from "@/lib/predictions/resolve";
 import { addDays, kstToday } from "@/lib/pricing/dates.mjs";
+import { marginCapPct, pickPreviousPrices, resolveSession } from "@/lib/pricing/daily-job";
 import { fetchUsdKrwOpenCloseRates } from "@/lib/pricing/fx.mjs";
 import { fetchTrendsSeparately } from "@/lib/pricing/naver.mjs";
 import {
@@ -58,35 +59,9 @@ function kstHour(): number {
   );
 }
 
-/* 어느 장의 가격을 만들지 정한다.
-   1) ?session= 이 있으면 그대로
-   2) Vercel 크론이면 x-vercel-cron-schedule 헤더로 판별한다.
-      Hobby 는 지정 시각이 아니라 그 시간대 안 아무 때나 실행하므로
-      (05:55 로 걸어도 05:00~05:59 사이) 현재 시각으로는 구분할 수 없다.
-   3) 그 외에는 KST 시각으로 추정한다 */
-function resolveSession(request: Request, param: string | null): "am" | "pm" {
-  if (param === "am" || param === "pm") return param;
-
-  const schedule = request.headers.get("x-vercel-cron-schedule");
-  if (schedule) {
-    // UTC 시(hour) 필드. 20시대=05시대 KST(오전장 준비), 6시대=15시대 KST(오후장 준비)
-    const utcHour = Number(schedule.trim().split(/\s+/)[1]);
-    if (Number.isFinite(utcHour)) return utcHour === 6 ? "pm" : "am";
-  }
-
-  const hour = kstHour();
-  return hour >= 15 && hour < 24 ? "pm" : "am";
-}
-
-/* 마진이 허용하는 최대 할인율.
-   Dmargin = (정가마진 - 최소마진) / (1 - 최소마진)
-   뺄셈이 아니다. docs/가격정책-마진연동-계산안.md §4 */
-function marginCapPct(product: ProductRow, policyCap: number): number {
-  const m0 = product.list_margin_pct;
-  const mMin = product.min_margin_pct;
-  if (m0 === null || mMin === null) return policyCap;
-  const d = ((m0 - mMin) / (100 - mMin)) * 100;
-  return Math.min(policyCap, d);
+/* 판단 로직은 lib/pricing/daily-job.ts 에 있다 — 테스트가 거기를 고정한다. */
+function sessionOf(request: Request, param: string | null): "am" | "pm" {
+  return resolveSession(param, request.headers.get("x-vercel-cron-schedule"), kstHour());
 }
 
 /* Vercel 크론은 GET 으로 호출하고 CRON_SECRET 을 Authorization 헤더로 보낸다.
@@ -106,7 +81,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
 
   const url = new URL(request.url);
   const publishDate: string = url.searchParams.get("date") ?? kstToday();
-  const session = resolveSession(request, url.searchParams.get("session"));
+  const session = sessionOf(request, url.searchParams.get("session"));
   const commitParam = url.searchParams.get("commit");
   const commit = commitParam === null ? defaultCommit : commitParam === "1";
 
@@ -251,11 +226,9 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       .select("product_id,price_won,publish_date,price_session")
       .lt("publish_date", publishDate)
       .order("publish_date", { ascending: false })
+      .order("price_session", { ascending: false }) // 같은 날이면 오후가가 직전이다
       .limit(rows.length * 2);
-    const prevByProduct = new Map<string, number>();
-    for (const row of previous ?? []) {
-      if (!prevByProduct.has(row.product_id)) prevByProduct.set(row.product_id, row.price_won);
-    }
+    const prevByProduct = pickPreviousPrices(previous ?? []);
 
     const priceRows = calculated.map(({ product, calc, search }) => {
       const prev = prevByProduct.get(product.id) ?? null;
