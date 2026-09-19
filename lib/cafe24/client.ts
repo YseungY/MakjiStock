@@ -1,3 +1,4 @@
+import { decryptSecret, encryptSecret } from "@/lib/crypto";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /* Cafe24 Admin API OAuth
@@ -7,10 +8,11 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 
 const REFRESH_MARGIN_MS = 5 * 60 * 1000; // 만료 5분 전이면 미리 갱신
 
-export type Cafe24Tokens = {
+/* 토큰은 암호문으로 저장한다. 이 타입의 *_ciphertext 를 평문으로 오해하지 말 것. */
+export type Cafe24TokenRow = {
   mall_id: string;
-  access_token: string;
-  refresh_token: string;
+  access_token_ciphertext: string;
+  refresh_token_ciphertext: string;
   access_token_expires_at: string;
   refresh_token_expires_at: string;
   scopes: string[];
@@ -95,8 +97,8 @@ async function save(payload: TokenResponse) {
   const { mallId } = cafe24Env();
   const row = {
     mall_id: mallId,
-    access_token: payload.access_token,
-    refresh_token: payload.refresh_token,
+    access_token_ciphertext: encryptSecret(payload.access_token),
+    refresh_token_ciphertext: encryptSecret(payload.refresh_token),
     access_token_expires_at: parseCafe24Time(payload.expires_at).toISOString(),
     refresh_token_expires_at: parseCafe24Time(payload.refresh_token_expires_at).toISOString(),
     scopes: payload.scopes ?? [],
@@ -104,7 +106,13 @@ async function save(payload: TokenResponse) {
   };
   const { error } = await supabaseAdmin().from("cafe24_tokens").upsert(row);
   if (error) throw new Error(`토큰 저장 실패: ${error.message}`);
-  return row;
+  // 호출부가 실수로 평문을 흘리지 않도록 만료 정보만 돌려준다.
+  return {
+    mall_id: row.mall_id,
+    access_token: payload.access_token,
+    access_token_expires_at: row.access_token_expires_at,
+    refresh_token_expires_at: row.refresh_token_expires_at,
+  };
 }
 
 export async function exchangeCodeForTokens(code: string) {
@@ -130,9 +138,11 @@ export async function getAccessToken(): Promise<string> {
     throw new Error("Cafe24 토큰이 없습니다. /api/auth/cafe24/start 로 인증을 먼저 진행하세요.");
   }
 
-  const tokens = data as Cafe24Tokens;
+  const tokens = data as Cafe24TokenRow;
   const expiresAt = new Date(tokens.access_token_expires_at).getTime();
-  if (Date.now() < expiresAt - REFRESH_MARGIN_MS) return tokens.access_token;
+  if (Date.now() < expiresAt - REFRESH_MARGIN_MS) {
+    return decryptSecret(tokens.access_token_ciphertext);
+  }
 
   if (Date.now() >= new Date(tokens.refresh_token_expires_at).getTime()) {
     throw new Error("refresh_token 이 만료됐습니다. /api/auth/cafe24/start 로 다시 인증하세요.");
@@ -140,7 +150,7 @@ export async function getAccessToken(): Promise<string> {
 
   const refreshed = (await requestToken({
     grant_type: "refresh_token",
-    refresh_token: tokens.refresh_token,
+    refresh_token: decryptSecret(tokens.refresh_token_ciphertext),
   })) as TokenResponse;
   const saved = await save(refreshed);
   return saved.access_token;
