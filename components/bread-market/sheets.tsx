@@ -20,7 +20,7 @@ import {
   won,
   type Bread,
 } from "@/lib/bread-market/engine";
-import { lockPhaseOf, resolveDemo, targetOf } from "@/lib/bread-market/flow";
+import { lockPhaseOf, targetOf } from "@/lib/bread-market/flow";
 import {
   CONSUMER_REWARD_NOTICE,
   REWARD_RATE_PCT,
@@ -37,7 +37,6 @@ import {
   lockPrice,
   makeCode,
   recordPurchase,
-  resolvePrediction,
   useBreadState,
   useSession,
 } from "@/lib/bread-market/store";
@@ -420,7 +419,10 @@ export function PredictionResult({ id, compact = false }: { id: string; compact?
             </div>
           </div>
         )}
-        <button className="btn btn--ghost" onClick={() => resolvePrediction(p.id, resolveDemo(p, makeCode))}>결과 미리보기 (데모)</button>
+        {/* 판정은 가격 산정 크론이 한다. 화면에서 결과를 만들지 않는다. */}
+        <p className="note" style={{ textAlign: "center", marginTop: 12 }}>
+          {p.targetLabel}가 확정되면 MY 에서 결과와 할인코드를 확인할 수 있어요.
+        </p>
       </div>
     );
   }

@@ -69,7 +69,7 @@ export async function GET() {
   const { data, error } = await db
     .from("price_locks")
     .select(
-      "id,product_id,lock_date,lock_session,locked_price_won,protect_from,protect_until,status,lock_code_amount_won,current_price_won_at_protect,reward_claim_id",
+      "id,product_id,lock_date,lock_session,locked_price_won,protect_from,protect_until,status,lock_code_amount_won,current_price_won_at_protect,reward_claim_id,products(ticker,name)",
     )
     .eq("visitor_hash", visitorHash)
     .in("lock_date", [date, yesterday])

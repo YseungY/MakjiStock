@@ -138,9 +138,24 @@ export function BreadMarketShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  /* 탭 이동 시 스크롤 맨 위로 (원본 setTab 과 동일) */
+  /* 탭 이동 시 스크롤 맨 위로. 단 #앵커로 왔으면 그 자리로 보낸다.
+     스크롤 컨테이너가 따로 있어 브라우저 기본 해시 이동이 듣지 않는다.
+     offsetTop 은 컨테이너가 아니라 .device 기준이라 못 쓴다. scrollIntoView 가
+     컨테이너를 알아서 찾는다. 목록이 아직 안 그려졌을 수 있어 한 프레임 미룬다. */
   useEffect(() => {
-    if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    const box = scrollRef.current;
+    if (!box) return;
+    const hash = window.location.hash.slice(1);
+    if (!hash) {
+      box.scrollTop = 0;
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      const target = box.querySelector(`#${CSS.escape(hash)}`);
+      if (target instanceof HTMLElement) target.scrollIntoView({ block: "start" });
+      else box.scrollTop = 0;
+    });
+    return () => cancelAnimationFrame(frame);
   }, [pathname]);
 
   const toast = useCallback((icon: string, title: string, desc?: string) => {

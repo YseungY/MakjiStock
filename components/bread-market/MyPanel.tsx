@@ -1,16 +1,23 @@
 "use client";
 
-import { BREADS, breadOf, quoteAt, won } from "@/lib/bread-market/engine";
+import { breadOf, quoteAt, won } from "@/lib/bread-market/engine";
 import { lockPhaseOf } from "@/lib/bread-market/flow";
 import { CONSUMER_REWARD_NOTICE, SESSION_LABEL, lockProtection } from "@/lib/bread-market/reward-policy";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { resetBreadState, useBreadState, useSession } from "@/lib/bread-market/store";
 import { useBreadMarket } from "./context";
-import { Photo, PredictionResult } from "./sheets";
+import { Photo } from "./sheets";
 
 /* MY: 비로그인 · 이 브라우저 기준. 가격 잠금 → 구매 → 예측 → 할인코드 순서로 보여줍니다. */
 type ServerLock = {
-  lock: { locked_price_won: number; lock_code_amount_won: number | null } | null;
+  lock: {
+    lock_session: "am" | "pm";
+    locked_price_won: number;
+    lock_code_amount_won: number | null;
+    status: string;
+    products: { ticker: string; name: string } | null;
+  } | null;
   discountCode: string | null;
   validUntil: string | null;
 };
@@ -34,18 +41,69 @@ function useLockCode(): ServerLock {
   return state;
 }
 
+type ServerPrediction = {
+  id: string;
+  direction: "up" | "down";
+  reference_price_won: number;
+  target_publish_date: string;
+  target_session: "am" | "pm";
+  result: "pending" | "hit" | "miss" | "void";
+  result_price_won: number | null;
+  reward_rate_pct: number;
+  products: { ticker: string; name: string } | null;
+  reward: { code: string; amountWon: number | null; validUntil: string | null } | null;
+};
+
+/* 예측도 서버가 정본이다. 판정은 가격 산정 크론이 한다. */
+function useServerPredictions(): ServerPrediction[] {
+  const [rows, setRows] = useState<ServerPrediction[]>([]);
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/predictions")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { predictions?: ServerPrediction[] } | null) => {
+        if (alive && data?.predictions) setRows(data.predictions);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return rows;
+}
+
+const RESULT_LABEL: Record<string, { title: string; tone: string }> = {
+  pending: { title: "판정 대기", tone: "flat" },
+  hit: { title: "적중", tone: "down" },
+  miss: { title: "미적중", tone: "flat" },
+  void: { title: "무효 · 가격 동일", tone: "flat" },
+};
+
 export function MyPanel() {
   const { todayKey, openSheet } = useBreadMarket();
   const server = useLockCode();
+  const preds = useServerPredictions();
   const my = useBreadState();
   const now = useSession();
   const session = now.session;
-  const codes = my.preds.filter((p) => p.reward?.code).length + (my.lock?.lockCode ? 1 : 0);
-  const activity = my.preds.length + my.purchases.length + (my.lock ? 1 : 0);
-  const lead = activity === 0 ? "시작해볼까요" : codes > 0 ? "할인코드 도착" : "기록 중";
-  const lock = my.lock;
+  const codes = preds.filter((p) => p.reward?.code).length + (server.discountCode ? 1 : 0);
+  /* 잠금은 서버가 정본이다. localStorage 는 서버 응답이 오기 전에만 쓴다.
+     브라우저 기록을 지워도 쿠키가 남아 서버에는 잠금이 그대로 있다.
+     로컬만 보면 "잠근 빵이 없어요"라고 해놓고 다시 잠글 때 409 가 난다. */
+  const lock = server.lock
+    ? {
+        tk: server.lock.products?.ticker ?? "",
+        lockedPrice: server.lock.locked_price_won,
+        session: server.lock.lock_session,
+        dateKey: todayKey,
+        status: server.lock.status === "purchased" ? ("purchased" as const) : ("active" as const),
+        lockedAt: "",
+      }
+    : my.lock;
   const phase = lockPhaseOf(lock, now, todayKey);
-  const lockBread = lock ? breadOf(lock.tk) : null;
+  const lockBread = lock?.tk ? breadOf(lock.tk) : null;
+  const activity = preds.length + my.purchases.length + (lock ? 1 : 0);
+  const lead = activity === 0 ? "시작해볼까요" : codes > 0 ? "할인코드 도착" : "기록 중";
 
   return (
     <section className="panel is-on" aria-label="MY">
@@ -53,7 +111,7 @@ export function MyPanel() {
         <div className="myhead__k">MY MAKJI</div>
         <h2 className="myhead__t">오늘도 한 조각,<br /><em>{lead}</em></h2>
         <div className="myhead__st">
-          <div className="mystat"><b className="n">{my.preds.length}</b><span>예측 참여</span></div>
+          <div className="mystat"><b className="n">{preds.length}</b><span>예측 참여</span></div>
           <div className="mystat"><b className="n">{codes}</b><span>할인코드</span></div>
         </div>
       </div>
@@ -90,7 +148,8 @@ export function MyPanel() {
               <b>오늘 잠근 빵이 없어요</b>
               <span>하루 한 번, 오전가 또는 오후가 중 하나를<br />빵 한 개에 잠가둘 수 있어요</span>
               <br />
-              <button className="empty__cta" onClick={() => openSheet({ type: "detail", tk: BREADS[0].tk })}>빵 고르러 가기</button>
+              {/* 첫 상품 상세를 여는 건 이상하다. 목록에서 직접 고르게 보낸다. */}
+              <Link className="empty__cta" href="/market#mktlist">빵 고르러 가기</Link>
             </div>
           )}
         </div>
@@ -99,27 +158,47 @@ export function MyPanel() {
       <div className="sect">
         <div className="sect__h"><h3 className="sect__t">예측과 할인코드</h3></div>
         <div className="mylist">
-          {my.preds.length === 0 ? (
+          {preds.length === 0 ? (
             <div className="empty">
               <i aria-hidden="true">🧭</i>
               <b>아직 예측 기록이 없어요</b>
-              <span>누구나 적중 3%, 구매자는 적중 7% · 틀려도 3%<br />쿠폰은 1회용 할인코드로 드려요</span>
+              <span>적중하면 3% 할인코드를 드려요<br />가격이 같으면 무효로 보고 참여자 모두에게 드려요</span>
               <br />
               <button className="empty__cta" onClick={() => openSheet({ type: "predict" })}>내일 가격 예측하기</button>
             </div>
           ) : (
-            my.preds.map((p) => {
-              const b = breadOf(p.tk);
+            preds.map((p) => {
+              const b = p.products?.ticker ? breadOf(p.products.ticker) : null;
+              const label = RESULT_LABEL[p.result] ?? RESULT_LABEL.pending;
+              const diff = p.result_price_won !== null ? p.result_price_won - p.reference_price_won : null;
               return (
                 <div className="myrow myrow--stack" key={p.id}>
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <div className="myrow__i myrow__i--ph"><Photo bread={b} /></div>
+                    {b ? <div className="myrow__i myrow__i--ph"><Photo bread={b} /></div> : null}
                     <div className="myrow__t">
-                      <b>{p.name} · {p.direction === "up" ? "오른다" : "내린다"}</b>
-                      <span>{p.role === "buyer" ? "구매자 · 내 매수가" : "일반 · 오늘 확정가"} {won(p.ref)}원 기준 · {p.targetLabel}</span>
+                      <b>{p.products?.name ?? ""} · {p.direction === "up" ? "오른다" : "내린다"}</b>
+                      <span>
+                        기준가 {won(p.reference_price_won)}원 · {p.target_publish_date}{" "}
+                        {p.target_session === "am" ? "오전가" : "오후가"}로 판정
+                        {diff !== null ? (
+                          <>
+                            <br />결과 {won(p.result_price_won!)}원 · 기준가 대비{" "}
+                            {diff > 0 ? "+" : diff < 0 ? "−" : ""}{won(Math.abs(diff))}원
+                          </>
+                        ) : null}
+                        {p.reward?.code ? (
+                          <>
+                            <br />할인코드 <b className="n">{p.reward.code}</b>
+                            {p.reward.amountWon ? ` · ${won(p.reward.amountWon)}원 할인` : null}
+                          </>
+                        ) : null}
+                      </span>
                     </div>
                   </div>
-                  <PredictionResult id={p.id} compact />
+                  <div className="myrow__v">
+                    <b className={label.tone}>{label.title}</b>
+                    {p.reward_rate_pct > 0 ? <span>{p.reward_rate_pct}% 보상</span> : null}
+                  </div>
                 </div>
               );
             })

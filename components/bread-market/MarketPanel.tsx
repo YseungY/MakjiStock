@@ -267,7 +267,7 @@ export function MarketPanel() {
         </div>
       </div>
 
-      <div className="mktlist">
+      <div className="mktlist" id="mktlist">
         {rows.map(({ b, q, d }) => {
           const c = cls(d.pct);
           const col = dirColor(c);

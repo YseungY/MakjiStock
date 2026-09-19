@@ -80,7 +80,7 @@ export async function GET() {
   const { data, error } = await db
     .from("prediction_entries")
     .select(
-      "id,product_id,direction,reference_price_won,target_publish_date,target_session,result,result_price_won,reward_rate_pct,submitted_at,resolved_at",
+      "id,product_id,direction,reference_price_won,target_publish_date,target_session,result,result_price_won,reward_rate_pct,submitted_at,resolved_at,products(ticker,name)",
     )
     .eq("visitor_hash", visitorHash)
     .eq("role", "general")
