@@ -11,7 +11,7 @@
    날짜는 모두 'YYYY-MM-DD' 문자열(KST 기준)로 다룹니다.
    ══════════════════════════════════════════════════════════ */
 
-export type Ticker = "MUF" | "FNC" | "SCN" | "MRL" | "TTR";
+export type Ticker = "MUF" | "FNC" | "SCN" | "MRL" | "TTR" | "GFD";
 
 export type Bread = {
   tk: Ticker;
@@ -22,13 +22,14 @@ export type Bread = {
   photo: string;
 };
 
-/* makji.kr 베스트셀러 중 판매중 5종 (원본 2026-09-14 확인 기준) */
+/* makji.kr 판매중 6종. config/pricing-products.json · Supabase products 와 같은 구성이다. */
 export const BREADS: Bread[] = [
   { tk: "MUF", name: "비건 잉글리시 머핀", full: "막지 비건 잉글리시 머핀(햄치즈/비건)", base: 1500, emoji: "🥪", photo: "/images/bread-market/muf-large.jpg" },
   { tk: "FNC", name: "휘낭시에", full: "겉바속쫀 막지 글루텐프리 휘낭시에", base: 3800, emoji: "🧈", photo: "/images/bread-market/fnc-large.jpg" },
   { tk: "SCN", name: "글루텐프리 스콘", full: "환상의 단짠 조합, 막지 글루텐프리 스콘", base: 3800, emoji: "🍪", photo: "/images/bread-market/scn-large.jpg" },
   { tk: "MRL", name: "모닝롤", full: "담백폭신 막지 제로 무설탕 모닝롤", base: 4500, emoji: "🍞", photo: "/images/bread-market/mrl-large.jpg" },
   { tk: "TTR", name: "테트리스 브레드", full: "폭신한 통식빵, 막지 테트리스 브레드", base: 11000, emoji: "🧩", photo: "/images/bread-market/ttr-large.jpg" },
+  { tk: "GFD", name: "냉동생지 3종", full: "집에서 굽는 막지 글루텐프리 냉동생지 3종", base: 21000, emoji: "🧊", photo: "/images/bread-market/gfd-large.png" },
 ];
 
 export const SHOP_URL = "https://makji.kr";
