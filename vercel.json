@@ -2,6 +2,10 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "crons": [
     {
+      "path": "/api/internal/reset-list-price",
+      "schedule": "0 15 * * *"
+    },
+    {
       "path": "/api/internal/daily-pricing?session=am",
       "schedule": "0 20 * * *"
     },
