@@ -47,6 +47,30 @@ export async function GET() {
 
   const latestDate = quotes.at(-1)?.publishDate ?? null;
 
+  /* 막지지수를 서버에서 계산해 내려보낸다.
+     화면에서 평균을 내면 어떤 상품이 빠졌는지에 따라 값이 달라지고, 그러면
+     같은 날짜에 대해 서버와 화면이 다른 지수를 말하게 된다.
+     지수 = 정가 대비 판매가 비율의 평균 × 100. 정가면 100, 10% 할인이면 90. */
+  const buckets = new Map<string, { sum: number; count: number }>();
+  for (const q of quotes) {
+    const key = `${q.publishDate}|${q.session}`;
+    const bucket = buckets.get(key) ?? { sum: 0, count: 0 };
+    bucket.sum += q.priceWon / q.basePriceWon;
+    bucket.count += 1;
+    buckets.set(key, bucket);
+  }
+  const indexSeries = [...buckets.entries()]
+    .map(([key, { sum, count }]) => {
+      const [publishDate, session] = key.split("|");
+      return {
+        publishDate,
+        session: session as "am" | "pm",
+        index: (sum / count) * 100,
+        products: count,
+      };
+    })
+    .sort((a, b) => (a.publishDate === b.publishDate ? (a.session < b.session ? -1 : 1) : a.publishDate < b.publishDate ? -1 : 1));
+
   return Response.json(
     {
       source: "supabase",
@@ -59,6 +83,7 @@ export async function GET() {
         basePriceWon: p.base_price_won,
       })),
       quotes,
+      indexSeries,
     },
     { headers: { "Cache-Control": "no-store" } },
   );

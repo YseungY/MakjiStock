@@ -10,6 +10,7 @@ import {
   cls,
   fixed,
   fxShownAt,
+  hydrateIndex,
   hydrateQuotes,
   labelOf,
   makjiIndexAt,
@@ -17,6 +18,7 @@ import {
   shortOf,
   signed,
   won,
+  type RealIndexRow,
   type RealQuoteRow,
 } from "@/lib/bread-market/engine";
 import { SESSION_LABEL, SESSION_RANGE, type Session } from "@/lib/bread-market/reward-policy";
@@ -155,9 +157,10 @@ export function BreadMarketShell({ children }: { children: React.ReactNode }) {
     let alive = true;
     fetch("/api/market")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((data: { quotes?: RealQuoteRow[] }) => {
+      .then((data: { quotes?: RealQuoteRow[]; indexSeries?: RealIndexRow[] }) => {
         if (!alive || !data.quotes?.length) return;
         hydrateQuotes(data.quotes);
+        if (data.indexSeries?.length) hydrateIndex(data.indexSeries);
         setDataVersion((n) => n + 1);
       })
       .catch(() => {});

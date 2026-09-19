@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { RollingNumber } from "./RollingNumber";
 import {
   BREADS,
   addDays,
@@ -230,7 +231,12 @@ export function MarketPanel() {
     <section className="panel is-on" aria-label="오늘의 빵 마켓">
       <div className="mkthead">
         <div className="mkthead__k"><span aria-hidden="true">🍞</span> 매일 06:00 · 16:00, 새롭게 구워지는 시세</div>
-        <h2 className="mkthead__t">맛있는 타이밍,<br /><em>오늘의 빵 마켓</em></h2>
+        <h2 className="mkthead__t">
+          맛있는 타이밍,<br />
+          <em>오늘의 빵 마켓</em>
+          {/* 지금 어느 장인지는 제목 옆에서 한눈에 잡히게 한다. */}
+          <b className="mkthead__ses">{SESSION_LABEL[session]}</b>
+        </h2>
         <div className="mkthead__row">
           <div>
             <span className="mkthead__v n">{fixed(idxT, 2)}</span>
@@ -244,7 +250,7 @@ export function MarketPanel() {
               ) : (
                 <>
                   <b className="n"><span className={cls(idxD)}>{arrow(idxD)} {signed(idxD, 2)}pt</span></b>
-                  <span>직전 가격 대비</span>
+                  <span>정가 100 기준 {BREADS.length}종 평균 수준</span>
                 </>
               )}
             </div>
@@ -256,7 +262,7 @@ export function MarketPanel() {
             <>지금은 <b>정가 시간</b>이에요(02:00–05:59). 모든 빵이 정가이고, 06:00에 오전가가 나와요.</>
           ) : (
             <>
-              {session === "pm" ? <><b>02:00부터 정가</b>로 돌아가요 · </> : null}지금 <b>{SESSION_LABEL[session]}</b> · 정가 100 기준 {BREADS.length}종 평균 가격 수준. 환율 <b className="n">{fxLabel(fx.drop)}</b> ({shortOf(fx.at)} 기준)
+              {session === "pm" ? <><b>02:00부터 정가</b>로 돌아가요 · </> : null}환율 <b className="n">{fxLabel(fx.drop)}</b> ({shortOf(fx.at)} 기준)
             </>
           )}
         </p>
@@ -314,7 +320,7 @@ export function MarketPanel() {
                 </span>
               </button>
               <button className="quote__rt" onClick={() => openSheet({ type: "detail", tk: b.tk })} aria-label={`${b.name} ${won(q.price)}원 상세 보기`}>
-                <b className="quote__p n">{won(q.price)}원</b>
+                <b className="quote__p n"><RollingNumber value={q.price} /></b>
                 {listTime ? (
                   <em className="quote__d flat">정가</em>
                 ) : (
@@ -342,7 +348,7 @@ export function MarketPanel() {
         <button className="predcard" onClick={() => openSheet({ type: "predict" })}>
           <div className="predcard__k">TOMORROW&rsquo;S BREAD</div>
           <h3 className="predcard__t">내일 이 빵, 오를까 내릴까</h3>
-          <p className="predcard__d">내일 06:00 오전가, 오를까 내릴까? 틀리지만 않으면 5% 쿠폰.<br />결과는 06:00 공개</p>
+          <p className="predcard__d">틀리지만 않으면 5% 쿠폰. 결과는 06:00 공개</p>
           <div className="predcard__b">
             <div>
               <b>{pb.name}</b>

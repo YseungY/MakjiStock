@@ -274,6 +274,17 @@ export function surgeOf(key: string, session: PriceSession) {
   return risen.sort((x, y) => y.q.searchChange - x.q.searchChange)[0];
 }
 
+/* 막지지수도 서버가 계산한 값을 쓴다.
+   화면에서 평균을 내면 어떤 상품이 빠졌는지에 따라 값이 달라져서,
+   같은 날짜에 대해 서버와 화면이 다른 지수를 말하게 된다. */
+const realIndex = new Map<string, number>();
+
+export type RealIndexRow = { publishDate: string; session: "am" | "pm"; index: number };
+
+export function hydrateIndex(rows: RealIndexRow[]) {
+  for (const row of rows) realIndex.set(`${row.publishDate}|${row.session}`, row.index);
+}
+
 export function hasRealData() {
   return realQuotes.size > 0;
 }
@@ -397,6 +408,12 @@ export function changeAt(bread: Bread, key: string, session: PriceSession) {
 }
 
 export function makjiIndexAt(key: string, session: PriceSession) {
+  if (session === "list") return 100; // 정가 시간에는 모든 빵이 정가다
+  const served = realIndex.get(`${key}|${session}`);
+  // 비영업일 오후에는 새 지수가 없다. 오전 확정 지수를 유지한다 (PRD §9.3).
+  const fallback = session === "pm" ? realIndex.get(`${key}|am`) : undefined;
+  if (served !== undefined) return served;
+  if (fallback !== undefined) return fallback;
   let s = 0;
   for (const b of BREADS) s += quoteAt(b, key, session).price / b.base;
   return (s / BREADS.length) * 100;
@@ -450,9 +467,7 @@ export function sessionSeries(bread: Bread, todayKey: string, days: number, sess
 
 /** 막지지수: 정가 100 기준 5종 평균 가격 수준 */
 export function makjiIndexOf(key: string) {
-  let s = 0;
-  for (const b of BREADS) s += quote(b, key).price / b.base;
-  return (s / BREADS.length) * 100;
+  return makjiIndexAt(key, "am");
 }
 
 /** 오늘 정가 대비 가장 많이 내린 상품 */
