@@ -1,5 +1,6 @@
 import pricingConfig from "@/config/pricing-products.json";
 import { decryptSecret } from "@/lib/crypto";
+import { currentPriceOf } from "@/lib/pricing/current-price";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { getOrCreateVisitorHash, readVisitorHash } from "@/lib/visitor";
 
@@ -14,6 +15,17 @@ export const dynamic = "force-dynamic";
 
    잠금가는 클라이언트가 보내지 않는다. 서버가 daily_prices 에서 읽는다 —
    값을 받으면 원하는 가격에 잠글 수 있다. */
+
+/** 화면은 티커로 생각한다. 상품 id 는 서버가 찾는다. */
+async function tickerToProductId(ticker: string): Promise<string | null> {
+  const { data } = await supabaseAdmin()
+    .from("products")
+    .select("id")
+    .eq("ticker", ticker)
+    .eq("active", true)
+    .maybeSingle();
+  return data?.id ?? null;
+}
 
 function kstNow() {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -120,31 +132,13 @@ export async function POST(request: Request) {
     (pricingConfig.pricing as { formulaVersion?: string }).formulaVersion ?? "v0.7";
 
   // 화면은 티커로 생각한다. 상품 id 는 서버가 찾는다.
-  let productId = body.productId;
+  const productId = body.productId ?? (await tickerToProductId(body.ticker!));
   if (!productId) {
-    const { data: product } = await db
-      .from("products")
-      .select("id")
-      .eq("ticker", body.ticker!)
-      .eq("active", true)
-      .maybeSingle();
-    if (!product) {
-      return Response.json({ error: `상품을 찾을 수 없습니다: ${body.ticker}` }, { status: 404 });
-    }
-    productId = product.id;
+    return Response.json({ error: `상품을 찾을 수 없습니다: ${body.ticker}` }, { status: 404 });
   }
 
-  // 잠금가는 서버가 정한다
-  const { data: price, error: priceError } = await db
-    .from("daily_prices")
-    .select("price_won,product_id")
-    .eq("product_id", productId)
-    .eq("publish_date", date)
-    .eq("price_session", session)
-    .eq("formula_version", formulaVersion)
-    .maybeSingle();
-
-  if (priceError) return Response.json({ error: priceError.message }, { status: 502 });
+  // 잠금가는 서버가 정한다 — 화면에 떠 있는 값과 같아야 한다
+  const price = await currentPriceOf(productId, date, session);
   if (!price) {
     return Response.json(
       { error: "오늘 이 상품의 확정가가 아직 없습니다." },
@@ -159,10 +153,10 @@ export async function POST(request: Request) {
     .from("price_locks")
     .insert({
       visitor_hash: visitorHash,
-      product_id: price.product_id,
+      product_id: price.productId,
       lock_date: date,
       lock_session: session,
-      locked_price_won: price.price_won,
+      locked_price_won: price.priceWon,
       protect_from: window.from,
       protect_until: window.until,
       // 이메일 인증은 쿠폰 발급 단계에서 받는다. 잠금 자체는 바로 유효하다.

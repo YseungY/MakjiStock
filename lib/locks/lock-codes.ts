@@ -1,6 +1,5 @@
-import { randomBytes } from "node:crypto";
-import { cafe24Request } from "@/lib/cafe24/client";
 import { encryptSecret } from "@/lib/crypto";
+import { CAFE24_CALL_GAP_MS, createDiscountCode } from "@/lib/rewards/discount-code";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
 /* 잠금 차액 할인코드 — PRD §4.4 · §12.4
@@ -18,9 +17,6 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
    visitor_token 쿠키가 본인 확인을 대신한다. 그래서 원문을 다시 읽어야 하고,
    PRD §16.7 에 따라 암호화해서 저장한다. */
 
-/** Cafe24 호출 버킷이 초당 2회로 회복된다. 그보다 느리게 보낸다. */
-const GAP_MS = 600;
-
 type LockRow = {
   id: string;
   visitor_hash: string;
@@ -31,19 +27,6 @@ type LockRow = {
   protect_until: string;
   products: { ticker: string; name: string; cafe24_product_no: number | null } | null;
 };
-
-/** 추측할 수 없는 코드. Cafe24 는 1~35자를 받는다. */
-function makeCode() {
-  return `MJ${randomBytes(7).toString("hex").toUpperCase()}`;
-}
-
-/* 할인코드 기간은 ISO 8601 에 타임존을 붙여 보낸다.
-   (토큰 응답은 타임존 없는 KST 로 오지만, 요청 형식은 별개다 — 문서 예시가
-    "2024-06-01T00:00:00+09:00" 형태다.) */
-function toCafe24Time(iso: string) {
-  const kst = new Date(iso).toLocaleString("sv-SE", { timeZone: "Asia/Seoul" });
-  return `${kst.replace(" ", "T")}+09:00`;
-}
 
 export type IssueResult = {
   ticker: string;
@@ -118,30 +101,14 @@ export async function issueLockCodes({
       continue;
     }
 
-    const code = makeCode();
     try {
-      const created = await cafe24Request<{ discountcode?: { discount_code_no?: string } }>(
-        "/api/v2/admin/discountcodes",
-        {
-          method: "POST",
-          body: JSON.stringify({
-            request: {
-              // 몰 관리자 목록에 뜨는 이름. 무엇 때문에 나간 코드인지 알아볼 수 있게 한다.
-              discount_code_name: `막지 잠금가 ${ticker} ${lockDate}`,
-              discount_code: code,
-              discount_value_unit: "W",
-              discount_value: amount,
-              discount_truncation_unit: "T",
-              available_start_date: toCafe24Time(lock.protect_from),
-              available_end_date: toCafe24Time(lock.protect_until),
-              available_product_type: "P",
-              available_product: [lock.products.cafe24_product_no],
-              available_user: "A",
-              available_issue_count: 1,
-            },
-          }),
-        },
-      );
+      const { code, codeNo } = await createDiscountCode({
+        name: `막지 잠금가 ${ticker} ${lockDate}`,
+        amountWon: amount,
+        cafe24ProductNo: lock.products.cafe24_product_no,
+        validFrom: lock.protect_from,
+        validUntil: lock.protect_until,
+      });
 
       const { data: claim, error: claimError } = await db
         .from("reward_claims")
@@ -150,7 +117,7 @@ export async function issueLockCodes({
           visitor_hash: lock.visitor_hash,
           amount_won: amount,
           sale_price_won_at_issue: current,
-          cafe24_discount_code_no: created.discountcode?.discount_code_no ?? null,
+          cafe24_discount_code_no: codeNo,
           discount_code_ciphertext: encryptSecret(code),
           valid_from: lock.protect_from,
           valid_until: lock.protect_until,
@@ -181,7 +148,7 @@ export async function issueLockCodes({
       });
     }
 
-    await new Promise((resolve) => setTimeout(resolve, GAP_MS));
+    await new Promise((resolve) => setTimeout(resolve, CAFE24_CALL_GAP_MS));
   }
 
   return out;

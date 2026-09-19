@@ -2,9 +2,9 @@
    Bread Market 가격 엔진 (데모)
    원본: 프로토타입_1차_3팀.html 의 quote / series / indexOf_ 를 그대로 옮겼습니다.
    가격 산식:
-     검색쿠폰 = 검색지수 × 0.10
+     검색할인 = 검색지수 × 0.145
      환율조정 = clamp(환율하락률 × 0.28 × 50, −28, +28)
-     할인율 = min(38, 검색쿠폰 + 환율조정)
+     할인율 = clamp(검색할인 + 환율조정, -10, +38)
      오늘가격 = 정가 × (1 − 할인율 ÷ 100), 10원 단위 반올림
    ※ 환율·검색지수는 시드 난수로 만든 데모 값입니다. 실서비스에서는
      이 모듈의 fxDropOf / searchIndexOf 를 실제 API 값으로 교체합니다.
@@ -153,6 +153,12 @@ export function addDays(key: string, n: number) {
 
 function dowOf(key: string) {
   return new Date(msOf(key)).getUTCDay();
+}
+
+/** 주말은 장을 쉰다. 금요일 확정가가 그대로 유지된다. */
+export function isMarketClosed(key: string) {
+  const g = dowOf(key);
+  return g === 0 || g === 6;
 }
 
 export function labelOf(key: string) {

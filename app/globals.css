@@ -807,3 +807,30 @@ body{display:grid;place-items:center}
 .myrow__i--ph{width:56px;height:56px;border-radius:15px;overflow:hidden;padding:0}
 .myrow--stack{display:grid;gap:10px}
 @media(max-width:370px){.quote{grid-template-columns:64px 1fr auto}.quote__ph{width:64px;height:64px}.top1__img{width:96px;height:96px}}
+
+/* ========== 히어로 안 막지지수 추이 ========== */
+.mkthead__row{align-items:flex-start}
+.mkthead__row > div:first-child{flex:none}
+.mkthead__d{text-align:left;margin-top:8px}
+.hero-spark{flex:1;min-width:0;max-width:190px}
+.hero-spark__c{
+  height:58px;border-radius:10px;overflow:hidden;
+  background:linear-gradient(180deg,rgba(255,255,255,.5),transparent);
+}
+.hero-spark__c svg{display:block;width:100%;height:100%}
+.hero-spark__x{
+  display:flex;justify-content:space-between;gap:4px;margin-top:5px;
+  font-size:9px;color:var(--ink-3);font-weight:700;
+}
+
+/* ========== 상세: 정가 → 환율 → 검색 3단 ========== */
+.calc__step{
+  display:flex;align-items:baseline;justify-content:space-between;gap:12px;
+  padding:9px 0;border-bottom:1px solid var(--paper-3);
+}
+.calc__step-l{font-size:11.5px;color:var(--ink-2);font-weight:700;min-width:0}
+.calc__step-l small{font-size:10.5px;font-weight:700;margin-left:2px}
+.calc__step-p{font-size:15px;font-weight:800;letter-spacing:-.03em;flex:none}
+.calc__step-p.is-struck{color:var(--ink-3);text-decoration:line-through;font-size:13.5px}
+.calc__step.is-final .calc__step-p{font-size:21px;color:var(--ink)}
+.calc__step.is-final{border-bottom:none}

@@ -6,7 +6,6 @@ import { CONSUMER_REWARD_NOTICE, SESSION_LABEL, lockProtection } from "@/lib/bre
 import { useEffect, useState } from "react";
 import { resetBreadState, useBreadState, useSession } from "@/lib/bread-market/store";
 import { useBreadMarket } from "./context";
-import { DemoClock } from "./MarketPanel";
 import { Photo, PredictionResult } from "./sheets";
 
 /* MY: 비로그인 · 이 브라우저 기준. 가격 잠금 → 구매 → 예측 → 할인코드 순서로 보여줍니다. */
@@ -130,8 +129,6 @@ export function MyPanel() {
       </div>
 
 
-      <DemoClock />
-
       <footer className="footer">
         <span className="blogo" role="img" aria-label="막지" />
         <div className="footer__sns">
@@ -147,12 +144,12 @@ export function MyPanel() {
           ))}
         </div>
         <p className="footer__t">
-          <b>MAKJI STOCK</b> · 빵값연구소 프로토타입 v1.1<br />
+          <b>MAKJI STOCK</b><br />
           비로그인 · 이 브라우저 기준 기록입니다. 쿠키를 지우면 기록이 사라져요.<br />
-          시세·검색지수·환율은 데모용 시드 데이터이며, 실제 주문과 결제는 막지 자사몰에서 진행됩니다.
+          시세는 네이버 검색 트렌드와 한국은행 원/달러 환율로 매일 06:00·16:00에 다시 계산합니다.<br />실제 주문과 결제는 막지 자사몰에서 진행됩니다.
         </p>
         {activity > 0 ? (
-          <button className="footer__reset" onClick={resetBreadState}>데모 기록 초기화</button>
+          <button className="footer__reset" onClick={resetBreadState}>이 브라우저 기록 지우기</button>
         ) : null}
       </footer>
     </section>

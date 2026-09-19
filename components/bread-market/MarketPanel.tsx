@@ -11,6 +11,7 @@ import {
   dirColor,
   fixed,
   fxDropOf,
+  isMarketClosed,
   fxLabel,
   linePath,
   makjiIndexAt,
@@ -30,7 +31,7 @@ import {
   lockAppliedPriceWon,
   lockProtection,
 } from "@/lib/bread-market/reward-policy";
-import { setClock, useBreadState, useSession, type Clock } from "@/lib/bread-market/store";
+import { useBreadState, useSession } from "@/lib/bread-market/store";
 import { useBreadMarket } from "./context";
 import { Photo } from "./sheets";
 
@@ -42,7 +43,16 @@ const SORTS: { id: Sort; label: string }[] = [
 ];
 
 /* 막지지수 91일 추이 — 기획안 백테스트 검증 기간과 같은 길이 */
-function IndexDash({ todayKey, dataVersion }: { todayKey: string; dataVersion: number }) {
+function IndexDash({
+  todayKey,
+  dataVersion,
+  compact = false,
+}: {
+  todayKey: string;
+  dataVersion: number;
+  /** 히어로 박스 안에서는 지수 값이 바로 옆에 이미 있어 머리말을 뺀다. */
+  compact?: boolean;
+}) {
   const { keys, vals } = useMemo(() => {
     /* 시세는 engine 의 모듈 저장소에 있어 이 함수의 인자로 들어오지 않는다.
        dataVersion 을 읽어 두어야 실시세가 주입됐을 때 다시 계산된다. */
@@ -57,12 +67,39 @@ function IndexDash({ todayKey, dataVersion }: { todayKey: string; dataVersion: n
     return { keys, vals };
   }, [todayKey, dataVersion]);
   const W = 300;
-  const H = 86;
+  const H = compact ? 58 : 86;
   const P = 4;
   const pt = linePath(vals, W, H, P);
   const last = vals[vals.length - 1];
   const dd = last - vals[0];
   const col = dd < 0 ? "var(--down)" : dd > 0 ? "var(--up)" : "var(--ink-3)";
+
+  const line = (
+    <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" role="img" aria-label="막지지수 91일 추이">
+      <defs>
+        <linearGradient id={compact ? "dashGc" : "dashG"} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={col} stopOpacity=".18" />
+          <stop offset="100%" stopColor={col} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={`${pt.d} L${W - P} ${H} L${P} ${H} Z`} fill={`url(#${compact ? "dashGc" : "dashG"})`} />
+      <path d={pt.d} fill="none" stroke={col} strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+      <circle cx={pt.lx.toFixed(1)} cy={pt.ly.toFixed(1)} r="2.6" fill={col} />
+    </svg>
+  );
+
+  if (compact) {
+    return (
+      <div className="hero-spark">
+        <div className="hero-spark__c">{line}</div>
+        <div className="hero-spark__x n">
+          <span>{ymdOf(keys[0])}</span>
+          <span>91일</span>
+          <span>{ymdOf(keys[keys.length - 1])}</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="dash">
@@ -101,29 +138,6 @@ function IndexDash({ todayKey, dataVersion }: { todayKey: string; dataVersion: n
       <div className="dash__f">
         정가를 100으로 둔 다섯 종의 평균 가격 수준입니다. 낮을수록 더 싸게 사는 날이고, 이 기간{" "}
         <b className="n">{fixed(pt.lo, 1)}</b>까지 내려간 적이 있습니다.
-      </div>
-    </div>
-  );
-}
-
-/* 데모 시각 전환 — 오전장·오후장·정가 시간을 바로 시연 */
-export function DemoClock() {
-  const my = useBreadState();
-  const options: { id: Clock; label: string }[] = [
-    { id: "live", label: "실제 시각" },
-    { id: "am", label: "오전장" },
-    { id: "pm", label: "오후장" },
-    { id: "list", label: "정가 시간" },
-  ];
-  return (
-    <div className="sect">
-      <div className="sect__h"><h3 className="sect__t">데모 시각</h3></div>
-      <div className="chiprow" role="group" aria-label="데모 시각 선택">
-        {options.map((o) => (
-          <button key={o.id} className={`chip${my.clock === o.id ? " is-on" : ""}`} aria-pressed={my.clock === o.id} onClick={() => setClock(o.id)}>
-            {o.label}
-          </button>
-        ))}
       </div>
     </div>
   );
@@ -216,15 +230,21 @@ export function MarketPanel() {
           <div>
             <span className="mkthead__v n">{fixed(idxT, 2)}</span>
             <span className="mkthead__u">pt</span>
+            <div className="mkthead__d">
+              <b className="n"><span className={cls(idxD)}>{arrow(idxD)} {signed(idxD, 2)}pt</span></b>
+              <span>직전 가격 대비</span>
+            </div>
           </div>
-          <div className="mkthead__d">
-            <b className="n"><span className={cls(idxD)}>{arrow(idxD)} {signed(idxD, 2)}pt</span></b>
-            <span>직전 가격 대비</span>
-          </div>
+          <IndexDash todayKey={todayKey} dataVersion={dataVersion} compact />
         </div>
         <p className="mkthead__note">
-          지금 <b>{SESSION_LABEL[session]}</b> · 정가 100 기준 {BREADS.length}종 평균 가격 수준. 환율 <b className="n">{fxLabel(fx.drop)}</b>
-          {fx.carried ? <b> (비영업일 이월)</b> : null} · 38%p 상한 도달 <b className="n">{caps}종</b>.
+          {isMarketClosed(todayKey) ? (
+            <>오늘은 <b>휴장</b> · 금요일 확정가를 그대로 보여드려요. 다음 시세는 월요일 06:00에 나옵니다. 정가 100 기준 {BREADS.length}종 평균 가격 수준</>
+          ) : (
+            <>지금 <b>{SESSION_LABEL[session]}</b> · 정가 100 기준 {BREADS.length}종 평균 가격 수준. 환율 <b className="n">{fxLabel(fx.drop)}</b></>
+          )}
+          {fx.carried && !isMarketClosed(todayKey) ? <b> (비영업일 이월)</b> : null} · 38%p 상한 도달{" "}
+          <b className="n">{caps}종</b>.
         </p>
       </div>
 
@@ -233,7 +253,6 @@ export function MarketPanel() {
       </div>
 
       <div className="sect sect--tight">
-        <IndexDash todayKey={todayKey} dataVersion={dataVersion} />
       </div>
 
       {/* 지수와 목록 사이: 지금 정가 대비 가장 많이 내린 한 종 */}
@@ -307,7 +326,6 @@ export function MarketPanel() {
         </button>
       </div>
 
-      <DemoClock />
 
       <div className="sect">
         <p className="note">

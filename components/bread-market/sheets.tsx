@@ -119,6 +119,8 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
   const ser = series(b, todayKey, 0, 14);
   const p = linePath(ser.map((s) => s.q.price), 300, 96, 6);
   const col = dirColor(cls(q.vsBase));
+  /* 환율만 반영했을 때의 가격. 판매가와 같은 10원 반올림을 쓴다. */
+  const fxOnlyPriceWon = Math.round((b.base * (1 - q.fxDisc / 100)) / 10) * 10;
   const gid = `g${b.tk}`;
 
   const lock = my.lock;
@@ -197,24 +199,31 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
         </div>
       </div>
 
+      {/* 정가 → 환율 반영 → 검색 할인까지 적용한 최종가.
+          퍼센트만 보여주면 얼마가 깎였는지 와닿지 않는다. 단계마다 금액을 찍는다. */}
       <div className="calc">
-        <div className="calc__r"><span>정가</span><b className="n">{won(b.base)}원</b></div>
-        <div className="calc__r">
-          <span>
-            <i className="calc__k" style={{ background: "#3C7CB8" }} />환율 조정{" "}
-            <small style={{ color: "var(--ink-3)" }}>({session === "list" ? "정가 시간" : `환율 ${fxLabel(q.fxDrop)}`})</small>
-          </span>
-          <b className={`n ${discCls(q.fxDisc)}`}>{discTxt(q.fxDisc)}</b>
+        <div className="calc__step">
+          <span className="calc__step-l">정가</span>
+          <b className="n calc__step-p is-struck">{won(b.base)}원</b>
         </div>
-        <div className="calc__r">
-          <span>
-            <i className="calc__k" style={{ background: "#BE9540" }} />검색 쿠폰{" "}
-            <small style={{ color: "var(--ink-3)" }}>(검색지수 {fixed(q.searchIdx, 1)})</small>
+        <div className="calc__step">
+          <span className="calc__step-l">
+            <i className="calc__k" style={{ background: "#3C7CB8" }} />환율 반영{" "}
+            <small className={discCls(q.fxDisc)}>{discTxt(q.fxDisc)}</small>
+            <small style={{ color: "var(--ink-3)" }}> · {session === "list" ? "정가 시간" : fxLabel(q.fxDrop)}</small>
           </span>
-          <b className={`n ${discCls(q.searchDisc)}`}>{discTxt(q.searchDisc)}</b>
+          <b className="n calc__step-p is-struck">{won(fxOnlyPriceWon)}원</b>
+        </div>
+        <div className="calc__step is-final">
+          <span className="calc__step-l">
+            <i className="calc__k" style={{ background: "#BE9540" }} />검색 할인{" "}
+            <small className={discCls(q.searchDisc)}>{discTxt(q.searchDisc)}</small>
+            <small style={{ color: "var(--ink-3)" }}> · 검색지수 {fixed(q.searchIdx, 1)}</small>
+          </span>
+          <b className="n calc__step-p">{won(q.price)}원</b>
         </div>
         <div className="calc__r is-total">
-          <span>최종 조정 <small style={{ fontWeight: 600, color: "var(--ink-3)" }}>−38%~+28%</small></span>
+          <span>최종 <small style={{ fontWeight: 600, color: "var(--ink-3)" }}>할인 38%까지 · 오르면 정가의 110%까지</small></span>
           <b className={`n ${discCls(q.total)}`}>{discTxt(q.total)}</b>
         </div>
       </div>
@@ -307,14 +316,45 @@ export function PredictSheet({ kind: role, tk, refPrice, onClose }: { kind: Role
       : my.preds.find((p) => p.role === "buyer" && p.tk === b.tk && p.ref === ref && p.dateKey === todayKey);
   const rate = REWARD_RATE_PCT[role];
 
-  function vote(direction: Direction) {
+  /* 예측도 서버가 확정한다. 한 회차 1회 제한과 기준가를 브라우저가 정하면
+     쿠키만 지워도 뚫리고, 원하는 기준가로 참여할 수 있다.
+     구매자 예측은 1차 출시 범위 밖이라 아직 로컬에만 남긴다. */
+  async function vote(direction: Direction) {
     if (voting) return;
     setVoting(direction);
-    toast("🧭", "예측 참여 완료", `${targetLabel}로 판정해요`);
-    window.setTimeout(() => {
+    try {
+      if (role === "general") {
+        const response = await fetch("/api/predictions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ticker: b.tk, direction }),
+        });
+        const payload = await response.json();
+        if (!response.ok) {
+          toast("⚠️", "예측하지 못했어요", payload.error ?? "잠시 후 다시 시도해주세요");
+          return;
+        }
+        addPrediction({
+          role,
+          tk: b.tk,
+          name: b.name,
+          direction,
+          ref: payload.entry.reference_price_won,
+          target,
+          targetLabel: payload.targetLabel ?? targetLabel,
+          dateKey: todayKey,
+          submittedSession: session,
+        });
+        toast("🧭", "예측 참여 완료", `${payload.targetLabel ?? targetLabel}로 판정해요`);
+        return;
+      }
       addPrediction({ role, tk: b.tk, name: b.name, direction, ref, target, targetLabel, dateKey: todayKey, submittedSession: session });
+      toast("🧭", "예측 참여 완료", `${targetLabel}로 판정해요`);
+    } catch {
+      toast("⚠️", "예측하지 못했어요", "네트워크 상태를 확인해주세요");
+    } finally {
       setVoting(null);
-    }, 520);
+    }
   }
 
   /* 1) 참여 전 */

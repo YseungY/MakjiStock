@@ -1,6 +1,8 @@
 import pricingConfig from "@/config/pricing-products.json";
 import { cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
+import { codeExpiry } from "@/lib/bread-market/reward-policy";
 import { issueLockCodes, type IssueResult } from "@/lib/locks/lock-codes";
+import { resolvePredictions, type ResolveResult } from "@/lib/predictions/resolve";
 import { addDays, kstToday } from "@/lib/pricing/dates.mjs";
 import { fetchUsdKrwOpenCloseRates } from "@/lib/pricing/fx.mjs";
 import { fetchTrendsSeparately } from "@/lib/pricing/naver.mjs";
@@ -22,6 +24,14 @@ export const maxDuration = 300;
    commit 없이는 계산과 저장까지만 하고 Cafe24 는 건드리지 않는다. */
 
 const SEARCH_WINDOW_DAYS = 90; // 백테스트와 같은 정규화 구간 (PRD §10.2)
+
+/* 주말은 장을 쉰다. 외환시장이 안 열려 새 입력이 없고, 금요일 종가로
+   억지로 다시 계산하면 같은 환율 충격이 이틀 더 반영된다.
+   금요일 확정가를 그대로 유지한다. */
+function isWeekend(isoDate: string) {
+  const day = new Date(`${isoDate}T00:00:00+09:00`).getUTCDay();
+  return day === 0 || day === 6;
+}
 const FX_LOOKBACK_DAYS = 12; // 연휴를 건너뛰고 직전 두 영업일을 찾기 위한 여유
 
 type ProductRow = {
@@ -142,6 +152,22 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
     if (productError) throw new Error(productError.message);
     const rows = (products ?? []) as ProductRow[];
     if (rows.length === 0) throw new Error("활성 상품이 없습니다.");
+
+    if (isWeekend(publishDate)) {
+      if (jobId) {
+        await db
+          .from("job_runs")
+          .update({ status: "held", finished_at: new Date().toISOString(), error_code: "market_closed" })
+          .eq("id", jobId);
+      }
+      return Response.json({
+        mode: "held",
+        trigger: request.headers.get("x-vercel-cron-schedule") ?? "manual",
+        reason: "주말은 장을 쉽니다. 금요일 확정가를 유지합니다.",
+        publishDate,
+        session,
+      });
+    }
 
     // ── 수집 ────────────────────────────────────────────────
     const signalDate: string = addDays(publishDate, -1);
@@ -347,11 +373,12 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       }
     }
 
+    const priceByProduct = new Map(calculated.map(({ product, calc }) => [product.id, calc!.priceWon]));
+
     /* 오후가가 확정되면 오전 잠금자의 보호가 16:00 에 시작된다.
        잠금가와 오후가의 차액을 할인코드로 발급한다 (PRD §4.4). */
     let lockCodes: IssueResult[] = [];
     if (session === "pm") {
-      const priceByProduct = new Map(calculated.map(({ product, calc }) => [product.id, calc!.priceWon]));
       lockCodes = await issueLockCodes({
         lockSession: "am",
         lockDate: publishDate,
@@ -360,6 +387,19 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       });
     }
 
+    /* 가격이 확정되는 순간이 예측 판정 시점이다 (PRD §13.3).
+       오전가 확정 → 전날 오후장 제출분, 오후가 확정 → 오늘 오전장 제출분.
+       쿠폰 유효기간은 판매가가 다시 내려갈 수 있는 다음 공개 시각 전까지다. */
+    const expiry = codeExpiry(session);
+    const expiryDate = addDays(publishDate, expiry.dayOffset);
+    const predictions: ResolveResult[] = await resolvePredictions({
+      targetDate: publishDate,
+      targetSession: session,
+      priceOf: (productId) => priceByProduct.get(productId) ?? null,
+      validUntil: `${expiryDate}T${expiry.time}:59+09:00`,
+      commit,
+    });
+
     const someFailed = applied.some((a) => a.result === "failed");
     if (jobId) {
       await db
@@ -367,7 +407,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
         .update({
           status: commit ? (someFailed ? "partially_failed" : "completed") : "calculated",
           finished_at: new Date().toISOString(),
-          step_log: { startedAt, collected: rows.length, calculated: calculated.length, applied, lockCodes },
+          step_log: { startedAt, collected: rows.length, calculated: calculated.length, applied, lockCodes, predictions },
         })
         .eq("id", jobId);
     }
@@ -405,6 +445,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       ),
       cafe24: commit ? applied : "드라이런 — Cafe24 를 호출하지 않았습니다. ?commit=1 로 반영합니다.",
       lockCodes: session === "pm" ? lockCodes : "오전장에는 발급하지 않습니다 (16:00 보호 시작 시점에 발급)",
+      predictions,
     });
   } catch (cause) {
     return fail("pipeline", cause);
