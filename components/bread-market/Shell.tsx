@@ -10,7 +10,9 @@ import {
   cls,
   fixed,
   fxShownAt,
+  hasRealData,
   hydrateMarket,
+  SEED_PRICES_ALLOWED,
   labelOf,
   makjiIndexAt,
   quoteAt,
@@ -131,6 +133,10 @@ export function BreadMarketShell({
   seedClock(clock.todayKey, clock.hour);
   if (market) hydrateMarket(market);
 
+  /* 실시세가 하나도 없으면 가격을 그리지 않는다. 시드는 로컬 개발에서만 쓴다 —
+     지어낸 숫자를 보고 잠그면 서버가 읽는 실제 가격과 달라진다. */
+  const noPrices = !hasRealData() && !SEED_PRICES_ALLOWED;
+
   const todayKey = useTodayKey() ?? clock.todayKey;
   const pathname = usePathname();
   const { session } = useSession();
@@ -204,10 +210,16 @@ export function BreadMarketShell({
       <div className="device">
         <div className="app">
           <AppBar todayKey={todayKey} session={session} />
-          {todayKey ? <Tape todayKey={todayKey} session={session} /> : null}
+          {todayKey && !noPrices ? <Tape todayKey={todayKey} session={session} /> : null}
 
           <div className="scroll" ref={scrollRef}>
-            {ctx ? (
+            {noPrices ? (
+              <p className="boot" role="alert">
+                시세를 불러오지 못했어요.
+                <br />
+                잠시 후 다시 열어 주세요.
+              </p>
+            ) : ctx ? (
               <BreadMarketContext.Provider value={ctx}>{children}</BreadMarketContext.Provider>
             ) : (
               <p className="boot">오늘의 빵값을 불러오는 중…</p>
@@ -249,7 +261,7 @@ export function BreadMarketShell({
           </div>
         </div>
 
-        {ctx && sheet ? (
+        {ctx && sheet && !noPrices ? (
           <BreadMarketContext.Provider value={ctx}>
             {sheet.type === "detail" ? <DetailSheet key={`d-${sheet.tk}`} tk={sheet.tk} onClose={closeSheet} /> : null}
             {sheet.type === "locked-detail" ? <LockedDetailSheet key={`ld-${sheet.tk}`} tk={sheet.tk} onClose={closeSheet} /> : null}

@@ -183,7 +183,13 @@ export function ymdOf(key: string) {
 
 /* ── 시드 데이터 ──
    실데이터가 주입되지 않은 구간(미래 날짜, 오프라인 개발)에만 쓰는 대체값이다.
-   SEED_SHIFT 는 시연용 오프셋이었고 실서비스에서는 0 이다. */
+   SEED_SHIFT 는 시연용 오프셋이었고 실서비스에서는 0 이다.
+
+   실서비스에서는 시드를 화면에 쓰지 않는다. 지어낸 가격은 진짜와 구별되지
+   않아서, 그 숫자를 보고 잠그면 서버가 읽은 실제 가격과 달라진다. 실시세가
+   하나도 없으면 가격 대신 오류를 띄운다 (components/bread-market/Shell.tsx).
+   NODE_ENV 는 Next 가 클라이언트 번들에도 같은 값으로 박아 넣는다. */
+export const SEED_PRICES_ALLOWED = process.env.NODE_ENV !== "production";
 const SEED_SHIFT = 0;
 
 function seedKey(key: string) {

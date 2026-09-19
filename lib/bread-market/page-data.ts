@@ -15,7 +15,11 @@ export type ShellData = {
 
 export async function loadShellData(): Promise<ShellData> {
   const [market, lock, predictions] = await Promise.all([
-    loadMarketData().catch(() => null),
+    loadMarketData().catch((cause) => {
+      // 삼키되 흔적은 남긴다. 이게 없으면 실서비스에서 시세가 빈 이유를 알 수 없다.
+      console.error("[market] 시세를 불러오지 못했습니다", cause);
+      return null;
+    }),
     loadLock().catch(() => EMPTY_LOCK),
     loadPredictions().catch(() => []),
   ]);
