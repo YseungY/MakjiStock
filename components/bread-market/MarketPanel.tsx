@@ -14,13 +14,12 @@ import {
   isMarketClosed,
   fxLabel,
   linePath,
+  seriesAt,
   makjiIndexAt,
   makjiIndexOf,
   predictBreadOf,
   quoteAt,
-  series,
   signed,
-  topDropAt,
   won,
   ymdOf,
 } from "@/lib/bread-market/engine";
@@ -205,7 +204,10 @@ export function MarketPanel() {
   const idxD = idxT - idxPrev;
   const fx = fxDropOf(todayKey);
   const caps = BREADS.filter((b) => quoteAt(b, todayKey, session).total >= CAP_TOTAL - 0.01).length;
-  const top = topDropAt(todayKey, session);
+  /* 급등주 — 검색지수가 가장 높은 한 종.
+     검색 할인 = 검색지수 × 0.145 이므로 검색으로 가장 많이 깎인 상품과 같다. */
+  const surge = BREADS.map((b) => ({ b, q: quoteAt(b, todayKey, session) }))
+    .sort((x, y) => y.q.searchIdx - x.q.searchIdx)[0];
 
   const rows = useMemo(() => {
     void dataVersion; // 실시세가 주입되면 가격·등락이 바뀐다
@@ -255,24 +257,6 @@ export function MarketPanel() {
       <div className="sect sect--tight">
       </div>
 
-      {/* 지수와 목록 사이: 지금 정가 대비 가장 많이 내린 한 종 */}
-      <div className="sect sect--tight">
-        <button className="top1" onClick={() => openSheet({ type: "detail", tk: top.b.tk })}>
-          <div className="top1__k"><span aria-hidden="true">🏅</span> {SESSION_LABEL[session]} 할인률 TOP 1</div>
-          <div className="top1__row">
-            <div className="top1__txt">
-              <div className="top1__nm">{top.b.name}</div>
-              <div className="top1__base n">정가 {won(top.b.base)}원</div>
-              <div className="top1__now n">{won(top.q.price)}원</div>
-              <div className={`top1__d n ${cls(top.q.vsBase)}`}>
-                {arrow(top.q.vsBase)} −{won(top.b.base - top.q.price)}원 ({signed(top.q.vsBase)}%)
-              </div>
-            </div>
-            <div className="top1__img"><Photo bread={top.b} /></div>
-          </div>
-        </button>
-      </div>
-
       <div className="sortbar">
         <span className="sortbar__l">정렬</span>
         <div className="chiprow" role="group" aria-label="정렬">
@@ -288,12 +272,17 @@ export function MarketPanel() {
         {rows.map(({ b, q, d }) => {
           const c = cls(d.pct);
           const col = dirColor(c);
-          const p = linePath(series(b, todayKey, 0, 7).map((s) => s.q.price), 54, 26, 3);
+          const p = linePath(seriesAt(b, todayKey, 7, session).map((s) => s.q.price), 54, 26, 3);
           return (
             <button className="quote" key={b.tk} onClick={() => openSheet({ type: "detail", tk: b.tk })}>
               <span className="quote__ph"><Photo bread={b} /></span>
               <span className="quote__nm">
-                <b>{b.name}</b>
+                <b>
+                  {b.name}
+                  {b.tk === surge.b.tk ? (
+                    <em className="surge" title={`검색지수 ${fixed(surge.q.searchIdx, 1)}`}>급등주</em>
+                  ) : null}
+                </b>
                 <span><em>{b.tk}</em> 정가 <s className="n">{won(b.base)}원</s></span>
                 <svg className="quote__sp" viewBox="0 0 54 26" preserveAspectRatio="none" aria-hidden="true">
                   <path d={p.d} fill="none" stroke={col} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />

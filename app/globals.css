@@ -834,3 +834,11 @@ body{display:grid;place-items:center}
 .calc__step-p.is-struck{color:var(--ink-3);text-decoration:line-through;font-size:13.5px}
 .calc__step.is-final .calc__step-p{font-size:21px;color:var(--ink)}
 .calc__step.is-final{border-bottom:none}
+
+/* ========== 급등주 배지 ========== */
+.surge{
+  display:inline-block;margin-left:5px;padding:1px 6px;border-radius:999px;
+  background:var(--up-soft);color:var(--up);
+  font-size:9.5px;font-weight:800;font-style:normal;letter-spacing:-.02em;
+  vertical-align:middle;
+}

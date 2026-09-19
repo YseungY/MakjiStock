@@ -366,6 +366,20 @@ export function dayChangeOf(bread: Bread, key: string) {
 }
 
 /** 오늘(todayKey)에서 off 일 떨어진 날까지 len 일치 시계열 (오래된 순) */
+/**
+ * 지금 화면에 뜬 가격에서 끝나는 추이.
+ * 과거는 오전가로 잇고 오늘만 현재 장 가격을 쓴다. 오전가로만 그리면
+ * 오후장에 선의 끝점이 옆의 큰 숫자와 달라진다.
+ */
+export function seriesAt(bread: Bread, todayKey: string, len: number, session: PriceSession) {
+  const out: { key: string; q: Quote }[] = [];
+  for (let i = len - 1; i >= 0; i--) {
+    const key = addDays(todayKey, -i);
+    out.push({ key, q: i === 0 ? quoteAt(bread, key, session) : quote(bread, key) });
+  }
+  return out;
+}
+
 export function series(bread: Bread, todayKey: string, off: number, len: number) {
   const out: { key: string; q: Quote }[] = [];
   for (let i = len - 1; i >= 0; i--) {
