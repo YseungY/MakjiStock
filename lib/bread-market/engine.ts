@@ -34,9 +34,14 @@ export const BREADS: Bread[] = [
 
 export const SHOP_URL = "https://makji.kr";
 
+/* 산식 v0.7 — config/pricing-products.json 과 같은 값이어야 한다.
+   실시세가 주입되면 이 상수는 쓰이지 않지만, 주입 전 대체값과 화면 문구가
+   실제 정책과 어긋나면 안 된다. */
 export const CAP_TOTAL = 38;
+/** 최종 할인율 하한. 정가의 110% 를 넘지 않는다. */
+export const CAP_SURCHARGE_TOTAL = 10;
 export const CAP_SURCHARGE = 28;
-export const SEARCH_MOMENTUM_WEIGHT = 0.1;
+export const SEARCH_MOMENTUM_WEIGHT = 0.145;
 export const FX_MOMENTUM_WEIGHT = 0.28;
 export const FX_SCALE = 50;
 /** 정가 대비 최대 하락가 비율 */
@@ -164,10 +169,10 @@ export function ymdOf(key: string) {
   return key.replaceAll("-", ".");
 }
 
-/* ── 시연일 시드 ──
-   표시 날짜는 실제 달력 그대로 두고 난수 시드만 일정하게 이동시킵니다.
-   ※ 실서비스에서는 SEED_SHIFT = 0 으로 두고 실제 API 값을 씁니다. */
-const SEED_SHIFT = 479;
+/* ── 시드 데이터 ──
+   실데이터가 주입되지 않은 구간(미래 날짜, 오프라인 개발)에만 쓰는 대체값이다.
+   SEED_SHIFT 는 시연용 오프셋이었고 실서비스에서는 0 이다. */
+const SEED_SHIFT = 0;
 
 function seedKey(key: string) {
   return SEED_SHIFT ? addDays(key, SEED_SHIFT) : key;
@@ -197,6 +202,51 @@ export function searchIndexOf(bread: Bread, key: string) {
   return clamp(30 + a * 70 + bell(r) * 10, 0, 100);
 }
 
+/* ── 실데이터 저장소 ──
+   Supabase daily_prices 를 담는다. 여기 값이 있으면 시드 계산 대신 이걸 쓴다.
+   화면에 뜨는 숫자가 Cafe24 에 실제로 보낸 값과 같아야 하므로, 클라이언트에서
+   다시 계산하지 않고 저장된 결과를 그대로 보여준다. */
+const realQuotes = new Map<string, Quote>();
+
+function realKey(tk: string, dateKey: string, session: PriceSession) {
+  return `${tk}|${dateKey}|${session}`;
+}
+
+export type RealQuoteRow = {
+  ticker: string;
+  publishDate: string;
+  session: "am" | "pm";
+  searchRatio: number;
+  searchDiscountPct: number;
+  fxDeclinePct: number;
+  fxDiscountPct: number;
+  discountPct: number;
+  basePriceWon: number;
+  priceWon: number;
+  fxCurrentDate: string;
+};
+
+export function hydrateQuotes(rows: RealQuoteRow[]) {
+  for (const row of rows) {
+    realQuotes.set(realKey(row.ticker, row.publishDate, row.session), {
+      fxDrop: row.fxDeclinePct,
+      fxCarried: false,
+      fxAt: row.fxCurrentDate,
+      fxDisc: row.fxDiscountPct,
+      searchIdx: row.searchRatio,
+      searchChange: 0,
+      searchDisc: row.searchDiscountPct,
+      total: row.discountPct,
+      price: row.priceWon,
+      vsBase: ((row.priceWon - row.basePriceWon) / row.basePriceWon) * 100,
+    });
+  }
+}
+
+export function hasRealData() {
+  return realQuotes.size > 0;
+}
+
 export type Quote = {
   fxDrop: number;
   fxCarried: boolean;
@@ -211,7 +261,7 @@ export type Quote = {
 };
 
 export function quote(bread: Bread, key: string): Quote {
-  return quoteWith(bread, key, fxDropOf(key));
+  return realQuotes.get(realKey(bread.tk, key, "am")) ?? quoteWith(bread, key, fxDropOf(key));
 }
 
 function quoteWith(bread: Bread, key: string, fx: { drop: number; carried: boolean; at: string }): Quote {
@@ -224,7 +274,7 @@ function quoteWith(bread: Bread, key: string, fx: { drop: number; carried: boole
   const previousSearchIdx = searchIndexOf(bread, addDays(key, -1));
   const searchChange = searchIdx - previousSearchIdx;
   const searchDisc = searchIdx * SEARCH_MOMENTUM_WEIGHT;
-  const total = Math.min(CAP_TOTAL, fxDisc + searchDisc);
+  const total = clamp(fxDisc + searchDisc, -CAP_SURCHARGE_TOTAL, CAP_TOTAL);
   const price = Math.round((bread.base * (1 - total / 100)) / 10) * 10;
   return {
     fxDrop: fx.drop,
@@ -256,7 +306,15 @@ export function fxDropPmOf(key: string) {
 
 export function quoteAt(bread: Bread, key: string, session: PriceSession): Quote {
   if (session === "am") return quote(bread, key);
-  if (session === "pm") return quoteWith(bread, key, fxDropPmOf(key));
+  if (session === "pm") {
+    /* 비영업일 오후는 새 가격을 만들지 않고 오전 확정가를 유지한다 (PRD §9.3).
+       그래서 pm 행이 없으면 am 을 먼저 찾고, 그것도 없을 때만 시드로 내려간다. */
+    return (
+      realQuotes.get(realKey(bread.tk, key, "pm")) ??
+      realQuotes.get(realKey(bread.tk, key, "am")) ??
+      quoteWith(bread, key, fxDropPmOf(key))
+    );
+  }
   const fx = fxDropOf(key);
   return {
     fxDrop: 0, fxCarried: fx.carried, fxAt: fx.at, fxDisc: 0,

@@ -42,8 +42,11 @@ const SORTS: { id: Sort; label: string }[] = [
 ];
 
 /* 막지지수 91일 추이 — 기획안 백테스트 검증 기간과 같은 길이 */
-function IndexDash({ todayKey }: { todayKey: string }) {
+function IndexDash({ todayKey, dataVersion }: { todayKey: string; dataVersion: number }) {
   const { keys, vals } = useMemo(() => {
+    /* 시세는 engine 의 모듈 저장소에 있어 이 함수의 인자로 들어오지 않는다.
+       dataVersion 을 읽어 두어야 실시세가 주입됐을 때 다시 계산된다. */
+    void dataVersion;
     const keys: string[] = [];
     const vals: number[] = [];
     for (let i = 90; i >= 0; i--) {
@@ -52,7 +55,7 @@ function IndexDash({ todayKey }: { todayKey: string }) {
       vals.push(makjiIndexOf(k));
     }
     return { keys, vals };
-  }, [todayKey]);
+  }, [todayKey, dataVersion]);
   const W = 300;
   const H = 86;
   const P = 4;
@@ -177,7 +180,7 @@ function LockCard({ todayKey }: { todayKey: string }) {
 }
 
 export function MarketPanel() {
-  const { todayKey, openSheet } = useBreadMarket();
+  const { todayKey, openSheet, dataVersion } = useBreadMarket();
   const my = useBreadState();
   const { session } = useSession();
   const [sort, setSort] = useState<Sort>("drop");
@@ -191,12 +194,13 @@ export function MarketPanel() {
   const top = topDropAt(todayKey, session);
 
   const rows = useMemo(() => {
+    void dataVersion; // 실시세가 주입되면 가격·등락이 바뀐다
     const arr = BREADS.map((b) => ({ b, q: quoteAt(b, todayKey, session), d: changeAt(b, todayKey, session) }));
     if (sort === "drop") arr.sort((x, y) => x.d.pct - y.d.pct);
     if (sort === "price") arr.sort((x, y) => y.q.price - x.q.price);
     if (sort === "name") arr.sort((x, y) => x.b.name.localeCompare(y.b.name, "ko"));
     return arr;
-  }, [sort, todayKey, session]);
+  }, [sort, todayKey, session, dataVersion]);
 
   const pb = predictBreadOf(todayKey);
   const pq = quoteAt(pb, todayKey, session);
@@ -229,7 +233,7 @@ export function MarketPanel() {
       </div>
 
       <div className="sect sect--tight">
-        <IndexDash todayKey={todayKey} />
+        <IndexDash todayKey={todayKey} dataVersion={dataVersion} />
       </div>
 
       {/* 지수와 목록 사이: 지금 정가 대비 가장 많이 내린 한 종 */}
@@ -307,7 +311,7 @@ export function MarketPanel() {
 
       <div className="sect">
         <p className="note">
-          {CONSUMER_REWARD_NOTICE} 표시 가격은 상품별 검색지수의 10%를 쿠폰으로 더하고 환율 변화를 ±28%p 범위로 반영합니다.
+          {CONSUMER_REWARD_NOTICE} 표시 가격은 상품별 검색지수의 14.5%를 쿠폰으로 더하고 환율 변화를 ±28%p 범위로 반영합니다. 최대 38% 할인, 오를 때는 정가의 110%까지입니다.
           오전장 06:00, 오후장 16:00에 가격이 바뀌고 00:00~05:59는 정가입니다. 실제 결제는 막지 자사몰에서 진행됩니다.
         </p>
       </div>

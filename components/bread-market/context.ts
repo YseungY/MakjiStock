@@ -11,6 +11,9 @@ export type SheetState =
 
 export type BreadMarketCtx = {
   todayKey: string;
+  /* 실시세가 주입될 때마다 올라간다. 시세를 memo 하는 곳은 반드시 의존성에
+     넣어야 한다 — 넣지 않으면 하이드레이션 후에도 시드 값이 남는다. */
+  dataVersion: number;
   openSheet: (s: SheetState) => void;
   toast: (icon: string, title: string, desc?: string) => void;
 };

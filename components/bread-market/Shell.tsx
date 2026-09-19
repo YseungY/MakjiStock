@@ -10,12 +10,14 @@ import {
   cls,
   fixed,
   fxDropOf,
+  hydrateQuotes,
   labelOf,
   makjiIndexAt,
   quoteAt,
   shortOf,
   signed,
   won,
+  type RealQuoteRow,
 } from "@/lib/bread-market/engine";
 import { SESSION_LABEL, SESSION_RANGE, type Session } from "@/lib/bread-market/reward-policy";
 import { useBreadState, useSession, useTodayKey } from "@/lib/bread-market/store";
@@ -116,6 +118,25 @@ export function BreadMarketShell({ children }: { children: React.ReactNode }) {
   const [sheet, setSheet] = useState<SheetState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [dataVersion, setDataVersion] = useState(0);
+
+  /* Supabase 에 저장된 실제 시세를 받아 engine 에 주입한다.
+     받기 전에는 시드 값이 보이고, 받은 뒤 리렌더되며 실값으로 바뀐다.
+     실패해도 화면은 시드로 계속 돈다 — 시세가 안 보이는 것보다 낫다. */
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/market")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((data: { quotes?: RealQuoteRow[] }) => {
+        if (!alive || !data.quotes?.length) return;
+        hydrateQuotes(data.quotes);
+        setDataVersion((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   /* 탭 이동 시 스크롤 맨 위로 (원본 setTab 과 동일) */
   useEffect(() => {
@@ -135,8 +156,8 @@ export function BreadMarketShell({ children }: { children: React.ReactNode }) {
   const closeSheet = useCallback(() => setSheet(null), []);
 
   const ctx = useMemo<Ctx | null>(
-    () => (todayKey ? { todayKey, openSheet: setSheet, toast } : null),
-    [todayKey, toast],
+    () => (todayKey ? { todayKey, dataVersion, openSheet: setSheet, toast } : null),
+    [todayKey, dataVersion, toast],
   );
 
   const activeIdx = Math.max(0, TABS.findIndex((t) => pathname?.startsWith(t.href)));
