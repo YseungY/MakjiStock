@@ -22,21 +22,15 @@ import {
 } from "@/lib/bread-market/engine";
 import { lockPhaseOf, targetOf } from "@/lib/bread-market/flow";
 import {
-  CONSUMER_REWARD_NOTICE,
   REWARD_RATE_PCT,
   SESSION_LABEL,
   lockAppliedPriceWon,
-  lockCodeAmountWon,
   lockProtection,
-  rewardMessage,
   type Direction,
   type Role,
 } from "@/lib/bread-market/reward-policy";
 import {
-  addPrediction,
   lockPrice,
-  makeCode,
-  recordPurchase,
   useBreadState,
   useSession,
 } from "@/lib/bread-market/store";
@@ -108,7 +102,7 @@ function Sheet({
    상품 상세 (원본 openDetail) — 큰 사진 · 세션 가격 · 잠금/구매
    ══════════════════════════════════════════ */
 export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }) {
-  const { todayKey, openSheet, toast } = useBreadMarket();
+  const { todayKey, openSheet } = useBreadMarket();
   const my = useBreadState();
   const now = useSession();
   const session = now.session;
@@ -128,17 +122,11 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
   const lockBlocked = lockUsed ? "오늘 잠금 사용 완료" : session === "list" ? "잠금은 06:00부터" : null;
   const lockHere = lock && lock.tk === b.tk && phase === "protecting";
 
-  function buy() {
-    let price = q.price;
-    let lockUpdate = undefined;
-    if (lockHere && lock) {
-      price = lockAppliedPriceWon(lock.lockedPrice, q.price);
-      const amount = lockCodeAmountWon(lock.lockedPrice, q.price);
-      lockUpdate = { ...lock, status: "purchased" as const, purchasePrice: price, lockCode: amount > 0 ? { code: makeCode("LK"), amount } : undefined };
-    }
-    recordPurchase({ tk: b.tk, price, session, dateKey: todayKey, viaLock: Boolean(lockHere) }, lockUpdate);
-    toast("🧾", `${won(price)}원에 구매했어요 (데모)`, lockHere ? "잠금가를 할인코드로 적용했어요" : "내 매수가 기준으로 예측해보세요");
-    openSheet({ type: "buyer", tk: b.tk, ref: price });
+  /* 구매는 Cafe24 에서 일어난다. 여기서 "구매했다"고 기록하지 않는다.
+     구매자 예측(내 매수가 대비)은 Cafe24 주문과 방문자를 잇는 다리가 생긴
+     뒤에 연다 — 1차 범위 밖이다. */
+  function goBuy() {
+    window.open(`/api/out/cafe24/${b.tk}`, "_blank", "noopener");
   }
 
   const foot = (
@@ -147,8 +135,8 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
         <button className="btn btn--ghost btn--sm" style={{ flex: 1 }} disabled={Boolean(lockBlocked)} onClick={() => openSheet({ type: "lock", tk: b.tk })}>
           {lockBlocked ?? `${SESSION_LABEL[session]} 가격 잠금`}
         </button>
-        <button className="btn btn--sm" style={{ flex: 1.4 }} onClick={buy}>
-          {lockHere && lock ? `잠금가 ${won(lockAppliedPriceWon(lock.lockedPrice, q.price))}원 구매` : "구매하고 예측하기"}
+        <button className="btn btn--sm" style={{ flex: 1.4 }} onClick={goBuy}>
+          {lockHere && lock ? `잠금가 ${won(lockAppliedPriceWon(lock.lockedPrice, q.price))}원 구매` : "막지 자사몰에서 구매"}
         </button>
       </div>
       <div style={{ display: "flex", justifyContent: "flex-end", fontSize: 11, fontWeight: 700 }}>
@@ -301,19 +289,18 @@ export function LockSheet({ tk, onClose }: { tk: string; onClose: () => void }) 
    가격 예측 — 일반: 오늘 확정가 대비 / 구매자: 내 매수가 대비
    ══════════════════════════════════════════ */
 export function PredictSheet({ kind: role, tk, refPrice, onClose }: { kind: Role; tk?: string; refPrice?: number; onClose: () => void }) {
-  const { todayKey, toast } = useBreadMarket();
-  const my = useBreadState();
+  const { todayKey, toast, predictions, refreshPredictions } = useBreadMarket();
   const { session } = useSession();
   const [voting, setVoting] = useState<Direction | null>(null);
+  /* 이번 회차 참여 여부는 서버가 안다. localStorage 만 보면 기록을 지운
+     사람에게 참여 화면을 보여주고, 누르면 409 가 난다. */
+  const submitted = role === "general" ? (predictions.find((p) => p.result === "pending") ?? null) : null;
   const b = role === "buyer" && tk ? breadOf(tk) : predictBreadOf(todayKey);
   const q = quoteAt(b, todayKey, session);
   const ref = role === "buyer" && refPrice !== undefined ? refPrice : q.price;
-  const { target, targetLabel } = targetOf(role, session);
-  const mine =
-    role === "general"
-      ? my.preds.find((p) => p.role === "general" && p.dateKey === todayKey)
-      : my.preds.find((p) => p.role === "buyer" && p.tk === b.tk && p.ref === ref && p.dateKey === todayKey);
+  const { targetLabel } = targetOf(role, session);
   const rate = REWARD_RATE_PCT[role];
+
 
   /* 예측도 서버가 확정한다. 한 회차 1회 제한과 기준가를 브라우저가 정하면
      쿠키만 지워도 뚫리고, 원하는 기준가로 참여할 수 있다.
@@ -333,21 +320,11 @@ export function PredictSheet({ kind: role, tk, refPrice, onClose }: { kind: Role
           toast("⚠️", "예측하지 못했어요", payload.error ?? "잠시 후 다시 시도해주세요");
           return;
         }
-        addPrediction({
-          role,
-          tk: b.tk,
-          name: b.name,
-          direction,
-          ref: payload.entry.reference_price_won,
-          target,
-          targetLabel: payload.targetLabel ?? targetLabel,
-          dateKey: todayKey,
-          submittedSession: session,
-        });
+        // 서버가 정본이다. 로컬에 따로 쓰지 않고 목록을 다시 받는다.
+        refreshPredictions();
         toast("🧭", "예측 참여 완료", `${payload.targetLabel ?? targetLabel}로 판정해요`);
         return;
       }
-      addPrediction({ role, tk: b.tk, name: b.name, direction, ref, target, targetLabel, dateKey: todayKey, submittedSession: session });
       toast("🧭", "예측 참여 완료", `${targetLabel}로 판정해요`);
     } catch {
       toast("⚠️", "예측하지 못했어요", "네트워크 상태를 확인해주세요");
@@ -356,8 +333,8 @@ export function PredictSheet({ kind: role, tk, refPrice, onClose }: { kind: Role
     }
   }
 
-  /* 1) 참여 전 */
-  if (!mine || voting) {
+  /* 1) 참여 전 (서버 확인 중이면 참여 화면을 먼저 보여준다) */
+  if (!submitted || voting) {
     return (
       <Sheet title={role === "buyer" ? "구매자 가격 예측" : "내일 가격 예측"} onClose={onClose} hero={b}>
         <div style={{ textAlign: "center", marginBottom: 18 }}>
@@ -392,65 +369,25 @@ export function PredictSheet({ kind: role, tk, refPrice, onClose }: { kind: Role
     );
   }
 
+  /* 2) 참여 후 — 판정은 가격 산정 크론이 한다. 결과와 할인코드는 MY 에서 본다. */
+  const chosen = submitted.direction === "up" ? "오른다" : "내린다";
   return (
-    <Sheet title={role === "buyer" ? "구매자 가격 예측" : "내일 가격 예측"} onClose={onClose} hero={b}>
-      <PredictionResult id={mine.id} />
+    <Sheet title="내일 가격 예측" onClose={onClose} hero={b}>
+      <div style={{ textAlign: "center", marginBottom: 14 }}>
+        <div className="eyebrow">참여 완료</div>
+        <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-.045em" }}>
+          {submitted.products?.name ?? b.name} · {chosen}
+        </div>
+        <div className="n" style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 700, marginTop: 4 }}>
+          기준가 {won(submitted.reference_price_won)}원 · {submitted.target_publish_date}{" "}
+          {submitted.target_session === "am" ? "오전가" : "오후가"}로 판정
+        </div>
+      </div>
+      <p className="note" style={{ textAlign: "center" }}>
+        결과가 나오면 MY 에서 확인할 수 있어요. 적중하면 3% 할인코드를 드리고,
+        가격이 같으면 무효로 보고 참여자 모두에게 드려요.
+      </p>
     </Sheet>
   );
 }
 
-/** 예측 한 건의 대기·결과·할인코드 카드 (시트와 MY에서 함께 사용) */
-export function PredictionResult({ id, compact = false }: { id: string; compact?: boolean }) {
-  const my = useBreadState();
-  const p = my.preds.find((x) => x.id === id);
-  if (!p) return null;
-  const b = breadOf(p.tk);
-  const chosen = p.direction === "up" ? "오른다" : "내린다";
-
-  if (!p.outcome || p.resultPrice === undefined || !p.reward) {
-    return (
-      <div>
-        {compact ? null : (
-          <div style={{ textAlign: "center", marginBottom: 14 }}>
-            <div className="eyebrow">내 예측</div>
-            <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-.045em" }}>{b.name} · {chosen}</div>
-            <div className="n" style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 700, marginTop: 4 }}>
-              {p.role === "buyer" ? "내 매수가" : "오늘 확정가"} {won(p.ref)}원 기준 · {p.targetLabel} 판정
-            </div>
-          </div>
-        )}
-        {/* 판정은 가격 산정 크론이 한다. 화면에서 결과를 만들지 않는다. */}
-        <p className="note" style={{ textAlign: "center", marginTop: 12 }}>
-          {p.targetLabel}가 확정되면 MY 에서 결과와 할인코드를 확인할 수 있어요.
-        </p>
-      </div>
-    );
-  }
-
-  const msg = rewardMessage(p.role, p.outcome, p.ref, p.resultPrice);
-  const diff = p.resultPrice - p.ref;
-  const tone = p.outcome === "hit" ? "ok" : p.outcome === "void" ? "warn" : "dup";
-  return (
-    <div>
-      <div className={`verdict ${tone}`}>
-        <div className="verdict__t">{msg.title}</div>
-        <p className="verdict__d">
-          {p.targetLabel} <b className="n">{won(p.resultPrice)}원</b> · 기준가 대비{" "}
-          <b className={`n ${cls(diff)}`}>{diff > 0 ? "+" : diff < 0 ? "−" : ""}{won(Math.abs(diff))}원</b> · 내 선택 {chosen}
-        </p>
-      </div>
-      {p.reward.code ? (
-        <div className="coupon">
-          <div className="coupon__k">{msg.badge} · 오늘 판매가 기준 {fixed(p.reward.couponPct, p.reward.couponPct % 1 ? 1 : 0)}% 쿠폰</div>
-          <div className="coupon__v n">{won(p.reward.amount)}<small>원</small></div>
-          <p className="coupon__c">{b.name} 전용 · 1회 사용 · {p.reward.validLabel}</p>
-          <p className="coupon__x">판매가 {won(p.reward.salePrice)}원 기준 · 비회원도 주문서 할인코드 칸에 입력</p>
-          <div className="coupon__code n">{p.reward.code}</div>
-        </div>
-      ) : (
-        <p className="note" style={{ textAlign: "center" }}>이번에는 쿠폰이 없어요. 내일 또 기회가 있어요.</p>
-      )}
-      {compact ? null : <p className="note" style={{ textAlign: "center", marginTop: 10 }}>{CONSUMER_REWARD_NOTICE}</p>}
-    </div>
-  );
-}

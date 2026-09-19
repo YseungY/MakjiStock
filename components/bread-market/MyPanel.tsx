@@ -41,37 +41,6 @@ function useLockCode(): ServerLock {
   return state;
 }
 
-type ServerPrediction = {
-  id: string;
-  direction: "up" | "down";
-  reference_price_won: number;
-  target_publish_date: string;
-  target_session: "am" | "pm";
-  result: "pending" | "hit" | "miss" | "void";
-  result_price_won: number | null;
-  reward_rate_pct: number;
-  products: { ticker: string; name: string } | null;
-  reward: { code: string; amountWon: number | null; validUntil: string | null } | null;
-};
-
-/* 예측도 서버가 정본이다. 판정은 가격 산정 크론이 한다. */
-function useServerPredictions(): ServerPrediction[] {
-  const [rows, setRows] = useState<ServerPrediction[]>([]);
-  useEffect(() => {
-    let alive = true;
-    fetch("/api/predictions")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { predictions?: ServerPrediction[] } | null) => {
-        if (alive && data?.predictions) setRows(data.predictions);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return rows;
-}
-
 const RESULT_LABEL: Record<string, { title: string; tone: string }> = {
   pending: { title: "판정 대기", tone: "flat" },
   hit: { title: "적중", tone: "down" },
@@ -80,9 +49,9 @@ const RESULT_LABEL: Record<string, { title: string; tone: string }> = {
 };
 
 export function MyPanel() {
-  const { todayKey, openSheet } = useBreadMarket();
+  const { todayKey, openSheet, predictions: preds } = useBreadMarket();
   const server = useLockCode();
-  const preds = useServerPredictions();
+
   const my = useBreadState();
   const now = useSession();
   const session = now.session;

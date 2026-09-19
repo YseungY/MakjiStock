@@ -20,8 +20,13 @@ import {
   type RealQuoteRow,
 } from "@/lib/bread-market/engine";
 import { SESSION_LABEL, SESSION_RANGE, type Session } from "@/lib/bread-market/reward-policy";
-import { useBreadState, useSession, useTodayKey } from "@/lib/bread-market/store";
-import { BreadMarketContext, type BreadMarketCtx as Ctx, type SheetState } from "./context";
+import { useSession, useTodayKey } from "@/lib/bread-market/store";
+import {
+  BreadMarketContext,
+  type BreadMarketCtx as Ctx,
+  type ServerPrediction,
+  type SheetState,
+} from "./context";
 import { DetailSheet, LockSheet, PredictSheet } from "./sheets";
 
 const NEXT_PUBLISH: Record<Session, string> = { am: "16:00 오후가", pm: "00:00 정가", list: "06:00 오전가" };
@@ -113,12 +118,25 @@ function Tape({ todayKey, session }: { todayKey: string; session: Session }) {
 export function BreadMarketShell({ children }: { children: React.ReactNode }) {
   const todayKey = useTodayKey();
   const pathname = usePathname();
-  const my = useBreadState();
   const { session } = useSession();
   const [sheet, setSheet] = useState<SheetState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [dataVersion, setDataVersion] = useState(0);
+  const [predictions, setPredictions] = useState<ServerPrediction[]>([]);
+
+  const refreshPredictions = useCallback(() => {
+    fetch("/api/predictions")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { predictions?: ServerPrediction[] } | null) => {
+        if (data?.predictions) setPredictions(data.predictions);
+      })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    refreshPredictions();
+  }, [refreshPredictions]);
 
   /* Supabase 에 저장된 실제 시세를 받아 engine 에 주입한다.
      받기 전에는 시드 값이 보이고, 받은 뒤 리렌더되며 실값으로 바뀐다.
@@ -171,12 +189,15 @@ export function BreadMarketShell({ children }: { children: React.ReactNode }) {
   const closeSheet = useCallback(() => setSheet(null), []);
 
   const ctx = useMemo<Ctx | null>(
-    () => (todayKey ? { todayKey, dataVersion, openSheet: setSheet, toast } : null),
-    [todayKey, dataVersion, toast],
+    () =>
+      todayKey
+        ? { todayKey, dataVersion, predictions, refreshPredictions, openSheet: setSheet, toast }
+        : null,
+    [todayKey, dataVersion, predictions, refreshPredictions, toast],
   );
 
   const activeIdx = Math.max(0, TABS.findIndex((t) => pathname?.startsWith(t.href)));
-  const couponCount = my.preds.filter((p) => p.reward?.code).length + (my.lock?.lockCode ? 1 : 0);
+  const couponCount = predictions.filter((p) => p.reward?.code).length;
 
   return (
     <div className="stage">

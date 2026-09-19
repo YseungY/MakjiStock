@@ -194,8 +194,7 @@ function LockCard({ todayKey }: { todayKey: string }) {
 }
 
 export function MarketPanel() {
-  const { todayKey, openSheet, dataVersion } = useBreadMarket();
-  const my = useBreadState();
+  const { todayKey, openSheet, dataVersion, predictions } = useBreadMarket();
   const { session } = useSession();
   const [sort, setSort] = useState<Sort>("drop");
 
@@ -219,8 +218,17 @@ export function MarketPanel() {
 
   const pb = predictBreadOf(todayKey);
   const pq = quoteAt(pb, todayKey, session);
-  const mine = my.preds.find((p) => p.role === "general" && p.dateKey === todayKey);
-  const predState = mine ? (!mine.outcome ? "참여 완료" : mine.outcome === "hit" ? "적중 🎯" : mine.outcome === "void" ? "무효" : "아쉬움") : "참여 →";
+  // 예측 상태도 서버가 정본이다. 가장 최근 한 건으로 배지를 정한다.
+  const latest = predictions[0];
+  const predState = !latest
+    ? "참여 →"
+    : latest.result === "pending"
+      ? "참여 완료"
+      : latest.result === "hit"
+        ? "적중 🎯"
+        : latest.result === "void"
+          ? "무효"
+          : "아쉬움";
 
   return (
     <section className="panel is-on" aria-label="오늘의 빵 마켓">
