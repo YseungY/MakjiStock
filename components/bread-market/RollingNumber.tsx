@@ -10,7 +10,7 @@ import { won } from "@/lib/bread-market/engine";
    effect 안에서 상태를 동기로 바꾸지 않는다.
    접근성 설정에서 동작 줄이기를 켠 사람에게는 굴리지 않는다. */
 
-const DURATION_MS = 1100;
+const DURATION_MS = 1000;
 const UNIT = 10; // 판매가는 10원 단위다
 
 export function RollingNumber({ value, className }: { value: number; className?: string }) {

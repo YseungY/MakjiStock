@@ -76,9 +76,13 @@ function Sheet({
   children: React.ReactNode;
 }) {
   const closeRef = useRef<HTMLButtonElement>(null);
-  /* 열릴 때 한 번만 닫기 버튼에 포커스 (입력 중 포커스를 뺏지 않도록 마운트 시점에만) */
+  /* 열릴 때 한 번만 닫기 버튼에 포커스 (입력 중 포커스를 뺏지 않도록 마운트 시점에만).
+     preventScroll 없이 부르면 뒤 화면이 밀린다 — 이 시점의 시트는 아직
+     translateY(100%) 라 화면 밖에 있고, 브라우저가 그 버튼을 보여주려고
+     .device 를 스크롤한다. overflow:hidden 이라 스크롤바가 없을 뿐 밀리기는
+     한다. 그래서 한 번 밀리면 되돌아오지도 않는다. */
   useEffect(() => {
-    closeRef.current?.focus();
+    closeRef.current?.focus({ preventScroll: true });
   }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

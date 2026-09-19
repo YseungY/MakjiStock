@@ -36,6 +36,10 @@
   --sh-l:0 30px 80px rgba(21,23,30,.22);
   --font:"Pretendard","Pretendard Variable","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
   --ease:cubic-bezier(.22,1,.36,1);
+  /* 시트 전용. "뿅" 은 길이가 아니라 출발 속도다 — --ease 는 첫 순간부터
+     등속의 4.5배로 튀어나온다. 이 곡선은 첫 기울기가 0 이라 멈춰 있다가
+     밀려 올라온 뒤 끝에서 잦아든다. 더 눌러야 하면 앞의 .2 를 키운다. */
+  --ease-sheet:cubic-bezier(.2,0,0,1);
   --spring:cubic-bezier(.2,1.25,.4,1);
   --img-brand:url("/images/bread-market/makji-logo.png");
 }
@@ -418,7 +422,8 @@ a{color:inherit;text-decoration:none}
 .sheet__veil{
   position:absolute;inset:0;background:rgba(14,16,20,.5);
   backdrop-filter:blur(3px);
-  animation:veilIn .3s var(--ease);
+  /* 시트와 같이 끝나야 한다. 어둠이 먼저 앉으면 시트가 뒤늦게 따라붙어 보인다. */
+  animation:veilIn .52s var(--ease-sheet);
 }
 @keyframes veilIn{from{opacity:0}to{opacity:1}}
 .sheet__in{
@@ -426,7 +431,7 @@ a{color:inherit;text-decoration:none}
   max-height:92%;display:flex;flex-direction:column;
   background:var(--paper);border-radius:26px 26px 0 0;
   box-shadow:0 -20px 60px rgba(14,16,20,.3);
-  animation:sheetUp .42s var(--ease);
+  animation:sheetUp .52s var(--ease-sheet);
 }
 @keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
 .sheet.is-full .sheet__in{top:0;max-height:none;border-radius:0}
@@ -446,7 +451,8 @@ a{color:inherit;text-decoration:none}
   transition:transform .2s var(--spring);
 }
 .sheet__x:active{transform:scale(.88)}
-.sheet__body{flex:1;min-height:0;overflow-y:auto;padding:20px 18px 28px}
+/* overscroll-behavior: 시트 안에서 끝까지 스크롤해도 뒤 목록으로 넘어가지 않는다. */
+.sheet__body{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 18px 28px}
 .sheet__body::-webkit-scrollbar{width:0}
 .sheet__foot{
   flex:none;padding:12px 18px calc(16px + env(safe-area-inset-bottom));
@@ -775,11 +781,6 @@ body{display:grid;place-items:center}
 
 .toast{position:fixed;top:82px;left:50%;z-index:100;display:flex;justify-content:space-between;gap:14px;width:min(calc(100% - 36px),394px);transform:translateX(-50%);padding:13px 15px;border-radius:16px;background:rgba(21,23,30,.95);color:#fff;font-size:11.5px;font-weight:700;text-align:left;box-shadow:0 12px 34px rgba(14,16,20,.3);backdrop-filter:blur(10px)}
 .toast span{opacity:.58}
-.sheetLayer{position:fixed;inset:0;z-index:120;display:flex;align-items:flex-end;justify-content:center;background:rgba(14,16,20,.5);backdrop-filter:blur(3px)}
-.sheetBackdrop{position:absolute;inset:0;width:100%;background:transparent}
-.bottomSheet{position:relative;z-index:1;width:min(430px,100vw);max-height:92vh;overflow-y:auto;padding:18px 18px calc(22px + env(safe-area-inset-bottom));border-radius:26px 26px 0 0;background:var(--paper);box-shadow:0 -20px 60px rgba(14,16,20,.3);animation:sheetUp .42s var(--ease)}
-.bottomSheet::before{content:"";display:block;width:38px;height:4px;margin:0 auto 19px;border-radius:3px;background:var(--line-2)}
-.sheetClose{position:absolute;top:13px;right:16px;z-index:2;display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--line);border-radius:50%;background:var(--paper-2);color:var(--ink-2);font-size:17px}
 .compactSheet h2,.predictionSheet h2{margin:0;padding-right:38px;font-size:22px;font-weight:800;letter-spacing:-.045em;line-height:1.3}
 .lockProduct,.predictionProduct{display:grid;grid-template-columns:50px 1fr auto;align-items:center;gap:10px;margin-top:17px;padding:9px;border:1px solid var(--line);border-radius:var(--r-m);background:#fff}
 .lockProduct div,.predictionProduct div{display:grid;gap:2px}.lockProduct strong,.predictionProduct strong{font-size:12.5px}.lockProduct span,.predictionProduct span{color:var(--ink-3);font-size:9.5px}.lockProduct b{font-size:14px}
