@@ -76,9 +76,15 @@ export async function POST(request: Request) {
   }
 
   // 기준가는 서버가 정한다 — 지금 화면에 떠 있는 확정가
+  /* 기준가는 오늘 확정가다. 아직 안 나왔으면(검색지수 보류 등) 몰도 화면도
+     정가 상태라 기준 삼을 값이 없다. 정가를 기준가로 쓰면 다음 날 판정이
+     항상 "내렸다"가 된다. */
   const price = await currentPriceOf(productId, target.referenceDate, target.submitSession);
   if (!price) {
-    return Response.json({ error: "지금 이 상품의 확정가가 아직 없습니다." }, { status: 409 });
+    return Response.json(
+      { error: "오늘 가격이 아직 나오지 않았어요. 잠시 뒤 다시 시도해주세요." },
+      { status: 409 },
+    );
   }
 
   // 라운드는 첫 제출 때 만든다. 따로 크론을 두지 않는다.

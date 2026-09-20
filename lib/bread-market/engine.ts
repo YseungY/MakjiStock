@@ -398,18 +398,40 @@ export function fxShownAt(key: string, session: PriceSession) {
   return { drop: q.fxDrop, at: q.fxAt };
 }
 
-export function quoteAt(bread: Bread, key: string, session: PriceSession): Quote {
-  if (session === "am") return quote(bread, key);
-  if (session === "pm") {
-    /* 주말 오후처럼 pm 행이 없으면 오전가, 그것도 없으면 가장 최근 확정가를 이월한다. */
-    return latestRealAtOrBefore(bread.tk, key, "pm") ?? quoteWith(bread, key, fxDropPmOf(key));
-  }
+/** 정가 — 할인 없음. 02:00~05:59 정가 구간과, 그날 확정가가 아직 없는 시간대. */
+function listQuote(bread: Bread, key: string): Quote {
   const fx = fxDropOf(key);
   return {
     fxDrop: 0, fxCarried: fx.carried, fxAt: fx.at, fxDisc: 0,
     searchIdx: searchIndexOf(bread, key), searchChange: 0, searchDisc: 0,
     total: 0, price: bread.base, vsBase: 0,
   };
+}
+
+/* 그날 확정가가 없으면 전날 값을 끌어오지 않고 정가를 보여준다.
+
+   몰은 02:00 에 정가로 되돌아가고(reset-list-price), 그날 가격이 만들어져야
+   다시 할인가가 올라간다(daily-pricing). 오전가가 보류된 아침에 전날 가격을
+   이월하면 몰은 정가로 결제받는데 화면만 싼 값을 말하게 된다.
+
+   오후가가 없는 날(주말)은 다르다. 그때는 오후 PUT 자체가 없어 몰이 오전가를
+   그대로 들고 있으므로, 화면도 같은 날 오전가로 떨어진다.
+
+   docs/네이버-검색지수-도착시각.md */
+/** 그날 실제로 쓰는 슬롯. 오후가가 없으면 같은 날 오전으로만 떨어진다. */
+function realSlotOnDay(tk: string, key: string, session: "am" | "pm") {
+  if (realQuotes.has(realKey(tk, key, session))) return session;
+  if (session === "pm" && realQuotes.has(realKey(tk, key, "am"))) return "am" as const;
+  return null;
+}
+
+export function quoteAt(bread: Bread, key: string, session: PriceSession): Quote {
+  if (session === "list") return listQuote(bread, key);
+  const slot = realSlotOnDay(bread.tk, key, session);
+  if (slot) return realQuotes.get(realKey(bread.tk, key, slot))!;
+  // 실시세를 하나도 받지 못한 로컬 데모에서만 시드로 내려간다.
+  if (hasRealData()) return listQuote(bread, key);
+  return quoteWith(bread, key, session === "pm" ? fxDropPmOf(key) : fxDropOf(key));
 }
 
 /** 직전 확정가: 오전장 ← 전날 오후가, 오후장 ← 오늘 오전가, 정가 시간(02:00–05:59) ← 전날 오후가.
@@ -420,10 +442,13 @@ export function previousQuoteAt(bread: Bread, key: string, session: PriceSession
 }
 
 export function changeAt(bread: Bread, key: string, session: PriceSession) {
-  /* 이월된 가격(주말 오후, 아직 안 나온 장)은 새 가격이 아니다. 0% 대신
-     그 가격이 실제로 확정된 장의 등락을 그대로 보여준다. */
-  const src = session === "list" ? null : realSlotAtOrBefore(bread.tk, key, session);
-  if (src && (src.key !== key || src.session !== session)) return changeAt(bread, src.key, src.session);
+  /* 화면에 뜬 가격(quoteAt)과 같은 기준으로 잰다.
+     주말 오후처럼 같은 날 오전가로 떨어졌으면 그 오전장의 등락을 그대로 쓴다 —
+     새 가격이 아니므로 0% 가 아니다.
+     그날 확정가가 아예 없으면 화면은 정가를 보여주므로 등락도 정가 기준이다.
+     지난 장의 등락을 끌어오면 정가에 엉뚱한 %가 붙는다. */
+  const src = session === "list" ? null : realSlotOnDay(bread.tk, key, session);
+  if (src && src !== session) return changeAt(bread, key, src);
   const current = quoteAt(bread, key, session);
   const previous = previousQuoteAt(bread, key, session);
   const amount = current.price - previous.price;

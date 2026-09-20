@@ -22,21 +22,30 @@ test("정가 시간(02:00~)은 아직 없는 오늘 오후가가 아니라 전�
   assert.equal(changeAt(b, "2026-09-18", "list").previousPrice, 10600);
 });
 
-test("아직 확정 안 된 장은 가장 최근 확정가를 이월해 보여준다", async () => {
+/* 그날 확정가가 없으면 전날 값을 끌어오지 않고 정가를 보여준다.
+   몰은 02:00 에 정가로 되돌아가고 그날 가격이 만들어져야 할인가가 다시 올라간다.
+   전날 가격을 이월하면 몰은 정가로 받는데 화면만 싼 값을 말한다.
+   docs/네이버-검색지수-도착시각.md */
+test("그날 확정가가 없으면 전날 값이 아니라 정가다", async () => {
   const { quoteAt } = await import("../lib/bread-market/engine.ts");
-  // 19일 행이 아직 없다 → 18일 오후가
-  assert.equal(quoteAt(b, "2026-09-19", "am").price, 10700);
-  assert.equal(quoteAt(b, "2026-09-19", "pm").price, 10700);
+  // 19일 행이 아직 없다 → 전날(10700)이 아니라 정가
+  assert.equal(quoteAt(b, "2026-09-19", "am").price, b.base);
+  assert.equal(quoteAt(b, "2026-09-19", "pm").price, b.base);
   // 18일 오후 행은 있다
   assert.equal(quoteAt(b, "2026-09-18", "pm").price, 10700);
 });
 
-test("이월된 가격은 0% 가 아니라 마지막 실제 등락을 보여준다", async () => {
+test("오후가만 없는 날은 같은 날 오전가로 떨어진다 — 주말은 몰이 오전가를 들고 있다", async () => {
+  const { hydrateQuotes, quoteAt } = await import("../lib/bread-market/engine.ts");
+  hydrateQuotes([row("2026-09-19", "am", 10900)]); // 19일 오전만 있다
+  assert.equal(quoteAt(b, "2026-09-19", "pm").price, 10900);
+});
+
+test("정가로 떨어진 장에는 지난 장의 등락을 붙이지 않는다", async () => {
   const { changeAt, signed } = await import("../lib/bread-market/engine.ts");
-  // 19일 행이 없다 → 18일 오후 등락(10400 → 10700)을 그대로
-  const c = changeAt(b, "2026-09-19", "am");
-  assert.equal(c.previousPrice, 10400);
-  assert.equal(c.amount, 300);
+  // 20일 행이 없다 → 정가. 18일 오후 등락(+300)을 끌어오면 정가에 엉뚱한 %가 붙는다.
+  const c = changeAt(b, "2026-09-20", "am");
+  assert.notEqual(c.amount, 300);
   assert.equal(signed(-0.02), "0.0");
   assert.equal(signed(-0.06), "−0.1");
 });
