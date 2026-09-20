@@ -19,13 +19,40 @@ const RESULT_LABEL: Record<string, { title: string; tone: string }> = {
   void: { title: "무효 · 가격 동일", tone: "flat" },
 };
 
+/* 할인쿠폰 — 코드와 보상만 담는다. 발급 이유는 쿠폰 밖 본문에 쓴다. */
+function CouponCode({ code, note }: { code: string; note?: string }) {
+  const { toast } = useBreadMarket();
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(code);
+      toast("✓", "쿠폰번호를 복사했어요", "자사몰 로그인 후 쿠폰번호를 등록해주세요");
+    } catch {
+      toast("⚠️", "복사하지 못했어요", "쿠폰번호를 길게 눌러 직접 복사해주세요");
+    }
+  }
+  return (
+    <button type="button" className="coupon" onClick={copy} aria-label={`할인코드 ${code} 복사`}>
+      <span className="coupon__code n">{code}</span>
+      {note ? <span className="coupon__r">{note}</span> : null}
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+        <rect x="9" y="9" width="12" height="12" rx="2.5" />
+        <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+      </svg>
+    </button>
+  );
+}
+
 export function MyPanel() {
   const { todayKey, openSheet, predictions: preds, lock: server } = useBreadMarket();
 
   const my = useBreadState();
   const now = useSession();
   const session = now.session;
-  const codes = preds.filter((p) => p.reward?.code).length + (server.discountCode ? 1 : 0);
+  /* 지금 뭔가 할 게 남은 것만 남긴다 — 결과를 기다리는 예측과 아직 쓸 수 있는
+     할인코드. 유효기간이 지난 코드는 서버가 code 를 비워 내려주고(visitor-data.ts),
+     그 줄은 여기서 통째로 사라진다. 다 지나가면 빈 상태로 돌아간다. */
+  const live = preds.filter((p) => p.result === "pending" || p.reward?.code);
+  const codes = live.filter((p) => p.reward?.code).length + (server.discountCode ? 1 : 0);
   /* 잠금은 서버가 정본이다. localStorage 는 서버 응답이 오기 전에만 쓴다.
      브라우저 기록을 지워도 쿠키가 남아 서버에는 잠금이 그대로 있다.
      로컬만 보면 "잠근 빵이 없어요"라고 해놓고 다시 잠글 때 409 가 난다. */
@@ -41,7 +68,7 @@ export function MyPanel() {
     : my.lock;
   const phase = lockPhaseOf(lock, now, todayKey);
   const lockBread = lock?.tk ? breadOf(lock.tk) : null;
-  const activity = preds.length + (lock ? 1 : 0);
+  const activity = live.length + (lock ? 1 : 0);
   const lead = activity === 0 ? "시작해볼까요" : codes > 0 ? "할인코드 도착" : "기록 중";
 
   return (
@@ -50,7 +77,7 @@ export function MyPanel() {
         <div className="myhead__k">MY MAKJI</div>
         <h2 className="myhead__t">오늘도 한 조각,<br /><em>{lead}</em></h2>
         <div className="myhead__st">
-          <div className="mystat"><b className="n">{preds.length}</b><span>예측 참여</span></div>
+          <div className="mystat"><b className="n">{live.length}</b><span>예측 참여</span></div>
           <div className="mystat"><b className="n">{codes}</b><span>할인코드</span></div>
         </div>
       </div>
@@ -59,27 +86,34 @@ export function MyPanel() {
         <div className="sect__h"><h3 className="sect__t">오늘의 가격 잠금</h3></div>
         <div className="mylist">
           {lock && lockBread ? (
-            <div className="myrow">
-              <div className="myrow__i myrow__i--ph"><Photo bread={lockBread} /></div>
-              <div className="myrow__t">
-                <b>{lockBread.name}</b>
-                <span>
-                  {SESSION_LABEL[lock.session]} 잠금 {won(lock.lockedPrice)}원 · {lockProtection(lock.session)?.label} 사용
-                  {server.discountCode ? (
-                    <>
-                      <br />오후가가 올라 <strong className="myrow__em">차액 쿠폰{server.lock?.lock_code_amount_won ? ` ${won(server.lock.lock_code_amount_won)}원` : ""}</strong>이 발급됐어요
-                      <br />쿠폰번호 <strong className="myrow__em n">{server.discountCode}</strong> · 새벽 01:59까지
-                      <br />막지 자사몰 가입 후 쿠폰번호를 등록하면 잠금가로 살 수 있어요.
-                    </>
-                  ) : null}
-                </span>
+            <div className={`myrow${server.discountCode ? " myrow--stack" : ""}`}>
+              <div className="myrow__top">
+                <div className="myrow__i myrow__i--ph"><Photo bread={lockBread} /></div>
+                <div className="myrow__t">
+                  <b>{lockBread.name}</b>
+                  <span>
+                    {SESSION_LABEL[lock.session]} 잠금 {won(lock.lockedPrice)}원 · {lockProtection(lock.session)?.label} 사용
+                  </span>
+                </div>
+                <div className="myrow__v">
+                  <b className={phase === "protecting" ? "down" : "flat"}>
+                    {phase === "holding" ? "보관 중" : phase === "protecting" ? "사용 가능" : phase === "purchased" ? "구매 완료" : "종료"}
+                  </b>
+                  <span>현재 {won(quoteAt(lockBread, todayKey, session).price)}원</span>
+                </div>
               </div>
-              <div className="myrow__v">
-                <b className={phase === "protecting" ? "down" : "flat"}>
-                  {phase === "holding" ? "보관 중" : phase === "protecting" ? "사용 가능" : phase === "purchased" ? "구매 완료" : "종료"}
-                </b>
-                <span>현재 {won(quoteAt(lockBread, todayKey, session).price)}원</span>
-              </div>
+              {server.discountCode ? (
+                <>
+                  <CouponCode
+                    code={server.discountCode}
+                    note={server.lock?.lock_code_amount_won ? `${won(server.lock.lock_code_amount_won)}원 차액` : undefined}
+                  />
+                  <p className="myrow__why">
+                    오후가가 올라 차액만큼 쿠폰이 발급됐어요 · 새벽 01:59까지<br />
+                    막지 자사몰 가입 후 쿠폰번호를 등록하면 잠금가로 살 수 있어요.
+                  </p>
+                </>
+              ) : null}
             </div>
           ) : (
             <div className="empty">
@@ -97,7 +131,7 @@ export function MyPanel() {
       <div className="sect">
         <div className="sect__h"><h3 className="sect__t">예측과 할인코드</h3></div>
         <div className="mylist">
-          {preds.length === 0 ? (
+          {live.length === 0 ? (
             <div className="empty">
               <i aria-hidden="true">🧭</i>
               <b>아직 예측 기록이 없어요</b>
@@ -106,38 +140,39 @@ export function MyPanel() {
               <button className="empty__cta" onClick={() => openSheet({ type: "predict" })}>내일 가격 예측하기</button>
             </div>
           ) : (
-            preds.map((p) => {
+            live.map((p) => {
               const b = p.products?.ticker ? breadOf(p.products.ticker) : null;
               const label = RESULT_LABEL[p.result] ?? RESULT_LABEL.pending;
               const diff = p.result_price_won !== null ? p.result_price_won - p.reference_price_won : null;
               return (
                 <div className="myrow myrow--stack" key={p.id}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div className="myrow__top">
                     {b ? <div className="myrow__i myrow__i--ph"><Photo bread={b} /></div> : null}
                     <div className="myrow__t">
                       <b>{p.products?.name ?? ""} · {p.direction === "up" ? "오른다" : "내린다"}</b>
                       <span>
-                        기준가 {won(p.reference_price_won)}원 · {p.target_publish_date}{" "}
-                        {p.target_session === "am" ? "오전가" : "오후가"}로 판정
-                        {diff !== null ? (
-                          <>
-                            <br />결과 {won(p.result_price_won!)}원 · 기준가 대비{" "}
-                            {diff > 0 ? "+" : diff < 0 ? "−" : ""}{won(Math.abs(diff))}원
-                          </>
-                        ) : null}
-                        {p.reward?.code ? (
-                          <>
-                            <br />할인코드 <b className="n">{p.reward.code}</b>
-                            {p.reward.amountWon ? ` · ${won(p.reward.amountWon)}원 할인` : null}
-                          </>
-                        ) : null}
+                        {p.target_publish_date} {p.target_session === "am" ? "오전가" : "오후가"}로 판정
                       </span>
                     </div>
+                    <div className="myrow__v">
+                      <b className={label.tone}>{label.title}</b>
+                    </div>
                   </div>
-                  <div className="myrow__v">
-                    <b className={label.tone}>{label.title}</b>
-                    {p.reward_rate_pct > 0 ? <span>{p.reward_rate_pct}% 보상</span> : null}
-                  </div>
+                  {p.reward?.code ? (
+                    <CouponCode
+                      code={p.reward.code}
+                      note={p.reward_rate_pct > 0 ? `${p.reward_rate_pct}% 보상` : undefined}
+                    />
+                  ) : null}
+                  <p className="myrow__why">
+                    기준가 {won(p.reference_price_won)}원
+                    {diff !== null ? (
+                      <>
+                        {" · "}결과 {won(p.result_price_won!)}원 · 기준가 대비{" "}
+                        {diff > 0 ? "+" : diff < 0 ? "−" : ""}{won(Math.abs(diff))}원
+                      </>
+                    ) : null}
+                  </p>
                 </div>
               );
             })

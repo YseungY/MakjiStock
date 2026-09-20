@@ -540,29 +540,6 @@ a{color:inherit;text-decoration:none}
 .tally__u{background:var(--up)} .tally__d{background:var(--down)}
 .tallyrow{display:flex;justify-content:space-between;font-size:10.5px;font-weight:800}
 
-/* 쿠폰 */
-.coupon{
-  position:relative;border-radius:var(--r-l);overflow:hidden;
-  background:linear-gradient(145deg,#FFFCF2,#F8EFD8);
-  border:1px solid var(--gold-line);
-  padding:22px 18px;text-align:center;
-}
-.coupon::before,.coupon::after{
-  content:"";position:absolute;width:22px;height:22px;border-radius:50%;
-  background:var(--paper);border:1px solid var(--gold-line);
-}
-.coupon::before{left:-12px;top:50%;margin-top:-11px}
-.coupon::after{right:-12px;top:50%;margin-top:-11px}
-.coupon__k{font-size:9.5px;font-weight:800;letter-spacing:.18em;color:var(--gold);margin-bottom:8px}
-.coupon__v{font-size:42px;font-weight:800;letter-spacing:-.055em;line-height:1;color:#8A6B22}
-.coupon__v small{font-size:17px;font-weight:800;margin-left:2px}
-.coupon__c{margin:9px 0 0;font-size:11.5px;color:var(--ink-2);font-weight:700}
-.coupon__x{margin:4px 0 0;font-size:10.5px;color:var(--ink-3)}
-.coupon__code{
-  display:inline-flex;align-items:center;gap:8px;margin-top:13px;
-  padding:8px 12px;border-radius:9px;background:#fff;border:1px dashed var(--gold-line);
-  font-size:12px;font-weight:800;letter-spacing:.08em;color:#8A6B22;
-}
 .verdict{
   padding:18px;border-radius:var(--r-l);margin-bottom:14px;text-align:center;
   animation:panelIn .45s var(--ease);
@@ -604,7 +581,6 @@ a{color:inherit;text-decoration:none}
 .myrow__t{flex:1;min-width:0}
 .myrow__t b{display:block;font-size:13px;font-weight:800;letter-spacing:-.025em}
 .myrow__t span{display:block;font-size:10.5px;color:var(--ink-3);margin-top:2px;line-height:1.5}
-.myrow__em{color:var(--blue-deep);font-weight:800}
 .myrow__v{flex:none;text-align:right}
 .myrow__v b{display:block;font-size:13px;font-weight:800;letter-spacing:-.02em}
 .myrow__v span{display:block;font-size:9.5px;color:var(--ink-3);font-weight:700;margin-top:1px}
@@ -779,8 +755,6 @@ body{display:grid;place-items:center}
 .predictionBanner>button,.predictionActions button,.predictionActions a{display:inline-flex;margin-top:14px;padding:10px 13px;border-radius:11px;background:var(--blue);color:#fff;font-size:10.5px;font-weight:800}
 .predictionActions{display:flex;flex-wrap:wrap;gap:7px}.predictionActions a{border:1px solid var(--blue-line);background:#fff;color:var(--blue-deep)}
 
-.toast{position:fixed;top:82px;left:50%;z-index:100;display:flex;justify-content:space-between;gap:14px;width:min(calc(100% - 36px),394px);transform:translateX(-50%);padding:13px 15px;border-radius:16px;background:rgba(21,23,30,.95);color:#fff;font-size:11.5px;font-weight:700;text-align:left;box-shadow:0 12px 34px rgba(14,16,20,.3);backdrop-filter:blur(10px)}
-.toast span{opacity:.58}
 .compactSheet h2,.predictionSheet h2{margin:0;padding-right:38px;font-size:22px;font-weight:800;letter-spacing:-.045em;line-height:1.3}
 .lockProduct,.predictionProduct{display:grid;grid-template-columns:50px 1fr auto;align-items:center;gap:10px;margin-top:17px;padding:9px;border:1px solid var(--line);border-radius:var(--r-m);background:#fff}
 .lockProduct div,.predictionProduct div{display:grid;gap:2px}.lockProduct strong,.predictionProduct strong{font-size:12.5px}.lockProduct span,.predictionProduct span{color:var(--ink-3);font-size:9.5px}.lockProduct b{font-size:14px}
@@ -834,6 +808,32 @@ body{display:grid;place-items:center}
 .lockcard__t small{font-size:10.5px;color:var(--ink-3);line-height:1.5}
 .myrow__i--ph{width:56px;height:56px;border-radius:15px;overflow:hidden;padding:0}
 .myrow--stack{display:grid;gap:10px}
+.myrow__top{display:flex;align-items:center;gap:12px}
+.myrow__why{margin:0;font-size:10.5px;color:var(--ink-3);line-height:1.55}
+/* 할인쿠폰 — 코드와 보상만. 발급 이유는 쿠폰 밖 .myrow__why 에 쓴다. */
+.coupon{
+  position:relative;display:flex;align-items:center;gap:9px;width:100%;
+  padding:11px 13px;border-radius:12px;
+  background:var(--blue-soft);border:1px dashed var(--blue-line);
+  color:var(--blue-deep);text-align:left;
+  transition:transform .16s var(--spring), border-color .2s;
+}
+.coupon:active{transform:scale(.985)}
+.coupon::before,.coupon::after{
+  content:"";position:absolute;top:50%;width:11px;height:11px;
+  border-radius:50%;background:#fff;transform:translateY(-50%);
+}
+.coupon::before{left:-6px}
+.coupon::after{right:-6px}
+.coupon__code{
+  flex:1;min-width:0;font-size:12px;font-weight:800;letter-spacing:-.01em;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.coupon__r{
+  flex:none;padding:3px 8px;border-radius:999px;background:#fff;
+  font-size:10px;font-weight:800;letter-spacing:-.02em;
+}
+.coupon svg{width:15px;height:15px;flex:none;opacity:.75}
 @media(max-width:370px){.quote{grid-template-columns:minmax(0,1fr) 70px 44px}.quote__main{grid-template-columns:60px minmax(0,1fr);gap:8px}.quote__ph{width:60px;height:60px}.quote__lock{width:40px;margin-right:0}.quote__p{font-size:14px}.top1__img{width:96px;height:96px}}
 
 /* ========== 히어로 안 막지지수 추이 ========== */

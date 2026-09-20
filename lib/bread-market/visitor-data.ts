@@ -67,7 +67,10 @@ export async function loadLock(): Promise<LockData> {
       .select("discount_code_ciphertext,valid_until,status")
       .eq("id", data.reward_claim_id)
       .maybeSingle();
-    if (claim?.discount_code_ciphertext) {
+    /* 잠금 쿠폰은 보호 구간(~다음 날 01:59)과 함께 끝난다. 시장 날짜가 02:00 에
+       바뀌면서 이 조회에서 저절로 빠지지만, 그 맞물림에 기대지 않고 직접 본다. */
+    const expired = claim?.valid_until ? new Date(claim.valid_until).getTime() <= Date.now() : false;
+    if (claim?.discount_code_ciphertext && !expired) {
       try {
         discountCode = decryptSecret(claim.discount_code_ciphertext);
         validUntil = claim.valid_until;
@@ -102,7 +105,7 @@ export type ServerPredictionRow = {
   result_price_won: number | null;
   reward_rate_pct: number;
   products: { ticker: string; name: string } | null;
-  reward: { code: string; amountWon: number | null; validUntil: string | null } | null;
+  reward: { code: string | null; amountWon: number | null; validUntil: string | null } | null;
 };
 
 export async function loadPredictions(): Promise<ServerPredictionRow[]> {
@@ -125,7 +128,8 @@ export async function loadPredictions(): Promise<ServerPredictionRow[]> {
   const hitIds = entries.filter((e) => e.result === "hit" || e.result === "void").map((e) => e.id);
 
   /* 보상 코드도 여기서 바로 내려준다. 자기 예측의 코드만 보인다. */
-  const codes = new Map<string, { code: string; amountWon: number | null; validUntil: string | null }>();
+  const codes = new Map<string, { code: string | null; amountWon: number | null; validUntil: string | null }>();
+  const now = Date.now();
   if (hitIds.length > 0) {
     const { data: claims } = await db
       .from("reward_claims")
@@ -134,8 +138,11 @@ export async function loadPredictions(): Promise<ServerPredictionRow[]> {
     for (const claim of claims ?? []) {
       if (!claim.discount_code_ciphertext || !claim.prediction_entry_id) continue;
       try {
+        /* 만료된 코드는 내려보내지 않는다. 몰에서 이미 안 먹는 번호를 복사하게
+           두면 결제 직전에야 알게 된다. 예측 기록 자체는 남긴다 — 적중은 적중이다. */
+        const expired = claim.valid_until ? new Date(claim.valid_until).getTime() <= now : false;
         codes.set(claim.prediction_entry_id, {
-          code: decryptSecret(claim.discount_code_ciphertext),
+          code: expired ? null : decryptSecret(claim.discount_code_ciphertext),
           amountWon: claim.amount_won,
           validUntil: claim.valid_until,
         });
