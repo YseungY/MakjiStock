@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { cafe24Request } from "@/lib/cafe24/client";
+import { CAFE24_WRITES_ENABLED, cafe24Request } from "@/lib/cafe24/client";
 
 /* Cafe24 할인코드 생성 — PRD §12.4
    잠금 차액과 예측 보상이 같은 API 를 쓴다. 필드 형식을 한 곳에만 둔다.
@@ -14,9 +14,13 @@ import { cafe24Request } from "@/lib/cafe24/client";
 /** 버킷 회복 속도(초당 2회)보다 느리게 보낸다. */
 export const CAFE24_CALL_GAP_MS = 600;
 
-/** 추측할 수 없는 코드. Cafe24 는 1~35자를 받는다. */
+/* 쓰기를 막는 판단은 cafe24/client.ts 가 한다. 여기서는 던지지 않고 코드 문자열만
+   만들어 돌려준다 — 판정·저장·화면이 운영과 같은 경로로 흐르게 두려는 것이다. */
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+/** 추측할 수 없는 코드. Cafe24 는 1~35자를 받는다. 운영은 MJ, 그 밖은 MJT. */
 export function makeDiscountCode() {
-  return `MJ${randomBytes(7).toString("hex").toUpperCase()}`;
+  return `${IS_PRODUCTION ? "MJ" : "MJT"}${randomBytes(7).toString("hex").toUpperCase()}`;
 }
 
 /** Cafe24 요청용 시각. KST 벽시계에 +09:00 을 붙인다. */
@@ -39,13 +43,21 @@ export async function createDiscountCode({
   validUntil: string;
 }): Promise<{ code: string; codeNo: string | null }> {
   const code = makeDiscountCode();
+
+  /* 몰에 만들지 않는다. 판정·저장·화면은 운영과 똑같이 흐르고 코드만 실재하지 않는다.
+     codeNo 가 null 인 것이 곧 "몰에 없는 코드"라는 표시다. */
+  if (!CAFE24_WRITES_ENABLED) {
+    console.warn(`[discount-code] 로컬 발급 — Cafe24 호출 생략: ${code} (${name})`);
+    return { code, codeNo: null };
+  }
+
   const created = await cafe24Request<{ discountcode?: { discount_code_no?: string } }>(
     "/api/v2/admin/discountcodes",
     {
       method: "POST",
       body: JSON.stringify({
         request: {
-          discount_code_name: name,
+          discount_code_name: IS_PRODUCTION ? name : `[테스트] ${name}`,
           discount_code: code,
           discount_value_unit: "W", // 정액
           discount_value: amountWon,

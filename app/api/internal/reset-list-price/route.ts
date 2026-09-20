@@ -1,4 +1,4 @@
-import { cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
+import { CAFE24_WRITES_ENABLED, cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
 import { kstToday } from "@/lib/pricing/dates.mjs";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -78,12 +78,14 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
         applied.push({ ticker: product.ticker, result: "skipped", reason: "cafe24_product_no 없음" });
         continue;
       }
-      if (!commit) {
+      // 로컬·프리뷰는 실몰 정가를 되돌리지 않는다 (cafe24/client.ts CAFE24_WRITES_ENABLED).
+      if (!commit || !CAFE24_WRITES_ENABLED) {
         applied.push({
           ticker: product.ticker,
           productNo: String(product.cafe24_product_no),
           listPriceWon: String(product.base_price_won),
-          result: "dry-run",
+          result: commit ? "skipped" : "dry-run",
+          ...(commit ? { reason: "로컬 — 실몰 반영 생략" } : {}),
         });
         continue;
       }

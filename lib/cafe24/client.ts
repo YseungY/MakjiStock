@@ -163,11 +163,26 @@ export async function getAccessToken(): Promise<string> {
   return saved.access_token;
 }
 
+/* 로컬·프리뷰도 운영과 같은 실몰(rabbit3456)을 본다. 읽기는 무해하지만 쓰기는
+   진짜 상품가와 쿠폰을 건드리므로 기본으로 막는다. 연동 자체를 확인해야 할 때만
+   CAFE24_ALLOW_LOCAL_WRITES=1 로 연다. */
+export const CAFE24_WRITES_ENABLED =
+  process.env.NODE_ENV === "production" || process.env.CAFE24_ALLOW_LOCAL_WRITES === "1";
+
 /** Admin API 호출. 401 이면 한 번 갱신하고 재시도한다 (PRD §12.2). */
 export async function cafe24Request<T = unknown>(
   pathname: string,
   init: RequestInit = {},
 ): Promise<T> {
+  /* 마지막 방어선. 호출하는 쪽이 저마다 검사하면 새 호출처가 하나 빠지는 순간
+     로컬에서 실몰이 바뀐다. 여기서 한 번 막으면 모든 경로가 덮인다. */
+  const method = (init.method ?? "GET").toUpperCase();
+  if (method !== "GET" && !CAFE24_WRITES_ENABLED) {
+    throw new Error(
+      `로컬에서는 Cafe24 쓰기를 보내지 않습니다 (${method} ${pathname}). ` +
+        "실몰에 반영하려면 CAFE24_ALLOW_LOCAL_WRITES=1 로 여세요.",
+    );
+  }
   const { mallId } = cafe24Env();
   const call = async (token: string) =>
     fetch(`https://${mallId}.cafe24api.com${pathname}`, {
