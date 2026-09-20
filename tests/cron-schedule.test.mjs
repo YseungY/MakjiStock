@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-/* vercel.json 의 크론 3개가 의도한 KST 시간대에 걸려 있는지 고정한다.
+/* vercel.json 의 크론이 의도한 KST 시간대에 걸려 있는지 고정한다.
 
    Vercel 크론은 UTC 로만 해석하고, Hobby 는 지정 분이 아니라 그 '시간대 안'
    아무 때나 실행한다. 그래서 각 작업을 공개 시각 직전 한 시간에 걸어
@@ -24,8 +24,29 @@ function cronFor(pathPrefix) {
   return found;
 }
 
-test("크론은 정가 리셋 · 오전가 · 오후가 3개다", () => {
-  assert.equal(vercelConfig.crons.length, 3);
+test("크론은 정가 리셋 · 오전가 · 오전가 따라잡기 4 · 오후가 7개다", () => {
+  // Hobby·Pro 모두 프로젝트당 100개까지다. 개수는 제약이 아니다.
+  assert.equal(vercelConfig.crons.length, 7);
+});
+
+/* 오전가 본 실행은 05시대에 돌지만, 그때 네이버 D-1 검색지수가 아직 없으면
+   가격을 만들지 않고 보류한다(route.ts). 보류하면 그날 오전가가 영영 안 생기므로
+   06·07시대에 따라잡기를 건다. 이미 만든 상품은 onlyIfMissing 이 건너뛴다 —
+   공개된 가격을 나중 실행이 덮어쓰면 화면에 떴던 값과 달라진다. */
+test("오전가 따라잡기는 공개 뒤 06~09시대에 있고 onlyIfMissing 이 붙어 있다", () => {
+  /* 네이버 도착 시각이 아직 05:21~09:30 구간까지만 좁혀져 있다
+     (docs/네이버-검색지수-도착시각.md). 그 구간을 시간마다 덮는다. */
+  const retries = cronFor("/api/internal/daily-pricing?session=am&onlyIfMissing=1");
+  assert.equal(retries.length, 4);
+  assert.deepEqual(
+    retries.map((c) => kstHourOf(c.schedule)).sort((a, b) => a - b),
+    [6, 7, 8, 9],
+  );
+});
+
+test("오전가 본 실행에는 onlyIfMissing 이 없다 — 매일 새로 만들어야 한다", () => {
+  const [am] = cronFor("/api/internal/daily-pricing?session=am");
+  assert.ok(!am.path.includes("onlyIfMissing"));
 });
 
 test("정가 리셋은 02시대 KST — 오후장(16:00~01:59) 뒤 02:00~05:59 정가 구간의 시작", () => {
@@ -33,9 +54,10 @@ test("정가 리셋은 02시대 KST — 오후장(16:00~01:59) 뒤 02:00~05:59 �
   assert.equal(kstHourOf(reset.schedule), 2);
 });
 
-test("오전가는 05시대 KST 에 만든다 — 06:00 공개 전", () => {
+test("오전가 본 실행은 05시대 KST 에 만든다 — 06:00 공개 전", () => {
   const [am] = cronFor("/api/internal/daily-pricing?session=am");
   assert.equal(kstHourOf(am.schedule), 5);
+  assert.ok(!am.path.includes("onlyIfMissing"));
 });
 
 test("오후가는 15시대 KST 에 만든다 — 16:00 공개 전", () => {

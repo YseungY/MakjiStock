@@ -1,6 +1,5 @@
 import pricingConfig from "@/config/pricing-products.json";
-import { cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
-import { codeExpiry } from "@/lib/bread-market/reward-policy";
+import { CAFE24_WRITES_ENABLED, cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
 import { issueLockCodes, type IssueResult } from "@/lib/locks/lock-codes";
 import { resolvePredictions, type ResolveResult } from "@/lib/predictions/resolve";
 import { addDays, kstToday } from "@/lib/pricing/dates.mjs";
@@ -18,7 +17,7 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
 export const maxDuration = 300;
 
 /* 일일 가격 산정 — PRD §11
-   POST /api/internal/daily-pricing?session=am|pm&date=YYYY-MM-DD&commit=1
+   POST /api/internal/daily-pricing?session=am|pm&date=YYYY-MM-DD&commit=1&onlyIfMissing=1
 
    백테스트(backtest/run.mjs)와 lib/pricing/ 의 같은 코드를 쓴다. 검증한 숫자와
    운영에서 나오는 숫자가 갈라지지 않게 하려는 것이다.
@@ -84,6 +83,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
   const session = sessionOf(request, url.searchParams.get("session"));
   const commitParam = url.searchParams.get("commit");
   const commit = commitParam === null ? defaultCommit : commitParam === "1";
+  const onlyIfMissing = url.searchParams.get("onlyIfMissing") === "1";
 
   const { formulaVersion = "v1.0", ...pricing } = pricingConfig.pricing as PricingConfig & {
     formulaVersion?: string;
@@ -123,8 +123,29 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       .eq("active", true)
       .order("ticker");
     if (productError) throw new Error(productError.message);
-    const rows = (products ?? []) as ProductRow[];
+    let rows = (products ?? []) as ProductRow[];
     if (rows.length === 0) throw new Error("활성 상품이 없습니다.");
+
+    /* 따라잡기 실행용. 이미 확정가가 있는 상품은 건드리지 않는다 — 공개된 가격을
+       나중 실행이 덮어쓰면 화면에 떴던 값과 달라진다. 앞선 실행이 보류한 상품만 만든다. */
+    if (onlyIfMissing) {
+      const { data: done } = await db
+        .from("daily_prices")
+        .select("product_id")
+        .eq("publish_date", publishDate)
+        .eq("price_session", session);
+      const made = new Set((done ?? []).map((r) => r.product_id as string));
+      rows = rows.filter((r) => !made.has(r.id));
+      if (rows.length === 0) {
+        if (jobId) {
+          await db
+            .from("job_runs")
+            .update({ status: "completed", finished_at: new Date().toISOString() })
+            .eq("id", jobId);
+        }
+        return Response.json({ mode: "skipped", reason: "이미 확정가가 있습니다.", publishDate, session });
+      }
+    }
 
     // ── 수집 ────────────────────────────────────────────────
     const signalDate: string = addDays(publishDate, -1);
@@ -180,6 +201,17 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
       if (!search) {
         // 90일 창 전체에 관측치가 없다. 이월할 값조차 없어 보류한다.
         return { product, status: "held" as const, reason: "검색지수 관측 이력 없음" };
+      }
+      /* D-1 지수가 아직 안 올라왔다. 이월해서 계산하면 전날과 입력이 똑같아
+         전날과 똑같은 가격이 나오고, 화면에는 등락 0% 로 뜬다 — 새 가격이 나온
+         것처럼 보이지만 아니다. 보류하면 화면은 마지막 확정가를 이월해 보여주고
+         (engine.ts realSlotAtOrBefore), 나중 실행이 진짜 D-1 로 다시 만든다. */
+      if (search.carried) {
+        return {
+          product,
+          status: "held" as const,
+          reason: `검색지수 미도착 — D-1(${signalDate}) 없음, ${search.sourceDate} 이월값뿐`,
+        };
       }
       const cap = marginCapPct(product, pricing.discountCapPct);
       const calc = calculateDay({
@@ -272,6 +304,12 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
           applied.push({ ticker: product.ticker, result: "skipped", reason: "cafe24_product_no 없음" });
           continue;
         }
+        /* 로컬·프리뷰는 실몰 판매가를 바꾸지 않는다. daily_prices 계산·저장까지만 하고
+           반영은 건너뛴다 — cafe24_apply_status 는 pending 으로 남는다. */
+        if (!CAFE24_WRITES_ENABLED) {
+          applied.push({ ticker: product.ticker, result: "skipped", reason: "로컬 — 실몰 반영 생략" });
+          continue;
+        }
         /* Cafe24 는 POST·PUT 에 쿼리스트링을 허용하지 않는다.
            400 "Query String is not available for POST, PUT Method."
            shop_no 는 body 로만 보낸다. */
@@ -329,14 +367,11 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
 
     /* 가격이 확정되는 순간이 예측 판정 시점이다 (PRD §13.3).
        예측은 모두 다음 날 06:00 오전가로 판정한다 — 오전가 확정 때 전날 제출분을 판정.
-       쿠폰은 다음 날 새벽 01:59(오후장 끝)까지 쓸 수 있다. */
-    const expiry = codeExpiry();
-    const expiryDate = addDays(publishDate, expiry.dayOffset);
+       쿠폰 유효 기간은 발급 시각 + 24시간이며 resolvePredictions 가 직접 정한다. */
     const predictions: ResolveResult[] = await resolvePredictions({
       targetDate: publishDate,
       targetSession: session,
       priceOf: (productId) => priceByProduct.get(productId) ?? null,
-      validUntil: `${expiryDate}T${expiry.time}:59+09:00`,
       commit,
     });
 
