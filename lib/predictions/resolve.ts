@@ -1,5 +1,11 @@
-import { REWARD_RATE_PCT, couponAmountWon, resolveDirection } from "@/lib/bread-market/reward-policy";
+import {
+  REWARD_RATE_PCT,
+  couponAmountWon,
+  predictionCodeValidUntil,
+  resolveDirection,
+} from "@/lib/bread-market/reward-policy";
 import { encryptSecret } from "@/lib/crypto";
+import { currentPriceOf } from "@/lib/pricing/current-price";
 import { CAFE24_CALL_GAP_MS, createDiscountCode } from "@/lib/rewards/discount-code";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 
@@ -10,6 +16,10 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
    (lib/predictions/schedule.ts) 실제 판정은 오전가 확정(05시대)에서만
    일어난다 — 오후가 크론은 대상이 없어 빈 결과를 돌려준다.
 
+   판정 대상은 "오늘 확정한 날짜"만이 아니라 그 이전의 pending 전부다. 크론이
+   한 번이라도 건너뛰면 그 날짜는 두 번 다시 오지 않아, 딱 그 날짜만 보면
+   영원히 판정 대기로 남는다. 지난 날짜분은 확정가를 DB 에서 읽어 따라잡는다.
+
    적중 5%, 동일가는 무승부로 5%, 빗나감 0% (PRD §4.3).
    쿠폰율은 상품 할인과 합쳐 38%를 넘지 않게 발급 시점 판매가로 깎는다. */
 
@@ -19,6 +29,7 @@ type EntryRow = {
   product_id: string;
   direction: "up" | "down";
   reference_price_won: number;
+  target_publish_date: string;
   products: { ticker: string; base_price_won: number; cafe24_product_no: number | null } | null;
 };
 
@@ -37,22 +48,22 @@ export type ResolveResult = {
 
 /**
  * 방금 확정된 가격으로 예측을 판정한다.
- * @param targetDate     판정 기준 가격의 공개일
+ * @param targetDate     방금 확정한 가격의 공개일. 이 날짜 이하의 pending 을 모두 판정한다.
  * @param targetSession  판정 기준 가격의 세션
  * @param priceOf        상품별 확정가
- * @param validUntil     보상 코드 유효 종료 시각(ISO). 판매가가 다시 내려가기 전까지.
+ *
+ * 코드 유효 기간은 발급 시각 + 24시간이다 (reward-policy.ts predictionCodeValidUntil).
+ * 호출자가 정하지 않는다 — 밀린 판정을 따라잡을 때 지나간 만료 시각이 붙는 것을 막는다.
  */
 export async function resolvePredictions({
   targetDate,
   targetSession,
   priceOf,
-  validUntil,
   commit,
 }: {
   targetDate: string;
   targetSession: "am" | "pm";
   priceOf: (productId: string) => number | null;
-  validUntil: string;
   commit: boolean;
 }): Promise<ResolveResult[]> {
   const db = supabaseAdmin();
@@ -60,12 +71,13 @@ export async function resolvePredictions({
   const { data, error } = await db
     .from("prediction_entries")
     .select(
-      "id,visitor_hash,product_id,direction,reference_price_won,products(ticker,base_price_won,cafe24_product_no)",
+      "id,visitor_hash,product_id,direction,reference_price_won,target_publish_date,products(ticker,base_price_won,cafe24_product_no)",
     )
     .eq("role", "general")
     .eq("result", "pending")
-    .eq("target_publish_date", targetDate)
-    .eq("target_session", targetSession);
+    .lte("target_publish_date", targetDate)
+    .eq("target_session", targetSession)
+    .order("target_publish_date");
 
   if (error) throw new Error(`예측 조회 실패: ${error.message}`);
   const entries = (data ?? []) as unknown as EntryRow[];
@@ -73,7 +85,12 @@ export async function resolvePredictions({
 
   for (const entry of entries) {
     const ticker = entry.products?.ticker ?? entry.product_id;
-    const resultPrice = priceOf(entry.product_id);
+    /* 오늘 확정분은 방금 계산한 값을, 밀린 날짜분은 그날 확정가를 읽는다.
+       밀린 건수만큼만 조회한다 — 평소에는 0 건이다. */
+    const resultPrice =
+      entry.target_publish_date === targetDate
+        ? priceOf(entry.product_id)
+        : ((await currentPriceOf(entry.product_id, entry.target_publish_date, targetSession))?.priceWon ?? null);
     if (resultPrice === null) continue; // 그 상품만 보류. 다음 실행에서 다시 본다.
 
     const outcome = resolveDirection(entry.direction, entry.reference_price_won, resultPrice);
@@ -122,11 +139,13 @@ export async function resolvePredictions({
     }
 
     try {
+      const issuedAt = new Date().toISOString();
+      const validUntil = predictionCodeValidUntil(issuedAt);
       const { code, codeNo } = await createDiscountCode({
         name: `막지 예측보상 ${ticker} ${targetDate}`,
         amountWon: amount,
         cafe24ProductNo: entry.products.cafe24_product_no,
-        validFrom: new Date().toISOString(),
+        validFrom: issuedAt,
         validUntil,
       });
 
@@ -138,10 +157,10 @@ export async function resolvePredictions({
         sale_price_won_at_issue: resultPrice,
         cafe24_discount_code_no: codeNo,
         discount_code_ciphertext: encryptSecret(code),
-        valid_from: new Date().toISOString(),
+        valid_from: issuedAt,
         valid_until: validUntil,
         status: "issued",
-        sent_at: new Date().toISOString(),
+        sent_at: issuedAt,
       });
       if (claimError) throw new Error(claimError.message);
 
