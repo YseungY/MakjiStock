@@ -33,3 +33,22 @@ test("틀리지만 않으면 5% — 적중·무승부 5%, 빗나가면 0%", () =
   assert.equal(RATE[resolveDirection("up", 4000, 4000)], 5);
   assert.equal(RATE[resolveDirection("up", 4000, 3800)], 0);
 });
+
+/* 예측 카드 배지는 "지금 열려 있는 회차에 참여했나"만 말한다.
+   어제 적중해도 오늘 안 냈으면 다시 참여 상태여야 한다. */
+test("회차는 날짜로 갈린다 — 어제 낸 예측은 오늘 회차가 아니다", () => {
+  const 어제회차 = predictionSchedule("2026-09-19", 10).targetDate; // 2026-09-20
+  const 오늘회차 = predictionSchedule("2026-09-20", 10).targetDate; // 2026-09-21
+  assert.notEqual(어제회차, 오늘회차);
+
+  const 내예측 = [{ target_publish_date: 어제회차, target_session: "am", result: "hit" }];
+  const 참여함 = (rows, round) =>
+    rows.some((r) => r.target_publish_date === round && r.target_session === "am");
+
+  assert.equal(참여함(내예측, 어제회차), true);
+  assert.equal(참여함(내예측, 오늘회차), false); // 적중이 남아 있어도 오늘은 미참여
+});
+
+test("제출 시각과 무관하게 같은 날이면 같은 회차다", () => {
+  assert.equal(predictionSchedule("2026-09-20", 10).targetDate, predictionSchedule("2026-09-20", 18).targetDate);
+});

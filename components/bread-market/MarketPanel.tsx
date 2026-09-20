@@ -25,10 +25,12 @@ import {
   ymdOf,
 } from "@/lib/bread-market/engine";
 import { lockPhaseOf } from "@/lib/bread-market/flow";
+import { predictionSchedule } from "@/lib/predictions/schedule";
 import {
   CONSUMER_REWARD_NOTICE,
   SESSION_LABEL,
   lockAppliedPriceWon,
+  lockOpensOn,
   lockProtection,
 } from "@/lib/bread-market/reward-policy";
 import { useBreadState, useSession } from "@/lib/bread-market/store";
@@ -155,7 +157,11 @@ function LockCard({ todayKey }: { todayKey: string }) {
     return (
       <div className="lockcard is-empty">
         <b><LockIcon size={13} /> 오전가 잠금 · 하루 1개</b>
-        <span>오후가 오르면 차액 쿠폰, 내리면 더 싸게.{session === "am" ? "" : ` 다음 잠금은 ${session === "pm" ? "내일" : "오늘"} 06:00.`}</span>
+        <span>
+          {lockOpensOn(todayKey)
+            ? `오후가 오르면 차액 쿠폰, 내리면 더 싸게.${session === "am" ? "" : ` 다음 잠금은 ${session === "pm" ? "내일" : "오늘"} 06:00.`}`
+            : "주말은 환율이 쉬어 오후가가 나오지 않아요. 잠금은 월요일 06:00에 다시 열려요."}
+        </span>
       </div>
     );
   }
@@ -207,19 +213,21 @@ export function MarketPanel() {
     return arr;
   }, [sort, todayKey, session]);
 
-  const pb = predictBreadOf(todayKey);
+  const locksOpen = lockOpensOn(todayKey);
+
+  /* 이 카드는 "지금 열려 있는 회차에 참여했나"만 말한다. 지난 회차 결과(적중·무효·
+     아쉬움)를 여기 띄우면 날이 바뀌어 다시 참여할 수 있는데도 어제의 적중 배지가
+     남는다. 결과는 MY 에 있다. */
+  const openRound = predictionSchedule(todayKey, session === "am" ? 10 : 18).targetDate;
+  const joined = predictions.find(
+    (p) => p.target_publish_date === openRound && p.target_session === "am",
+  );
+  const predState = joined ? "참여 완료" : "참여 →";
+
+  // 참여했으면 내가 고른 빵을, 아니면 오늘의 추천 빵을 보여준다.
+  const joinedBread = joined ? BREADS.find((b) => b.tk === joined.products?.ticker) : undefined;
+  const pb = joinedBread ?? predictBreadOf(todayKey);
   const pq = quoteAt(pb, todayKey, session);
-  // 예측 상태도 서버가 정본이다. 가장 최근 한 건으로 배지를 정한다.
-  const latest = predictions[0];
-  const predState = !latest
-    ? "참여 →"
-    : latest.result === "pending"
-      ? "참여 완료"
-      : latest.result === "hit"
-        ? "적중 🎯"
-        : latest.result === "void"
-          ? "무효"
-          : "아쉬움";
 
   return (
     <section className="panel is-on" aria-label="오늘의 빵 마켓">
@@ -288,8 +296,8 @@ export function MarketPanel() {
           const lock = my.lock;
           const lockedHere = Boolean(lock && lock.dateKey === todayKey && lock.tk === b.tk);
           const lockUsedElsewhere = Boolean(lock && lock.dateKey === todayKey && lock.tk !== b.tk);
-          const lockDisabled = session !== "am" || lockUsedElsewhere;
-          const lockLabel = lockedHere ? "잠금됨" : session === "am" ? "오전장" : "06시";
+          const lockDisabled = session !== "am" || lockUsedElsewhere || !locksOpen;
+          const lockLabel = lockedHere ? "잠금됨" : !locksOpen ? "휴장" : session === "am" ? "오전장" : "06시";
           return (
             <div className="quote" key={b.tk}>
               <button className="quote__main" onClick={() => openSheet({ type: "detail", tk: b.tk })}>
@@ -345,8 +353,10 @@ export function MarketPanel() {
           <p className="predcard__d">틀리지만 않으면 5% 쿠폰. 결과는 06:00 공개</p>
           <div className="predcard__b">
             <div>
-              <b>{pb.name}</b>
-              <span>지금 {won(pq.price)}원 · 내일 06:00 오전가로 판정</span>
+              <b>{pb.name}{joined ? ` · ${joined.direction === "up" ? "오른다" : "내린다"}` : ""}</b>
+              <span>
+                {joined ? `기준가 ${won(joined.reference_price_won)}원` : `지금 ${won(pq.price)}원`} · 내일 06:00 오전가로 판정
+              </span>
             </div>
             <em>{predState}</em>
           </div>

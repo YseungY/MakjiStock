@@ -1,3 +1,4 @@
+import { lockOpensOn } from "@/lib/bread-market/reward-policy";
 import pricingConfig from "@/config/pricing-products.json";
 import { currentPriceOf } from "@/lib/pricing/current-price";
 import { kstNow } from "@/lib/market/calendar";
@@ -69,6 +70,14 @@ export async function POST(request: Request) {
       { status: 409 },
     );
   }
+  /* 주말은 외환시장이 쉬어 오후가가 나오지 않는다. 보호할 가격 변동이 없으므로
+     하루 한 번뿐인 잠금을 쓰게 두지 않는다 (reward-policy.ts lockOpensOn). */
+  if (!lockOpensOn(date)) {
+    return Response.json(
+      { error: "주말에는 오후가가 나오지 않아 가격 잠금을 받지 않습니다. 월요일 06:00에 다시 열려요." },
+      { status: 409 },
+    );
+  }
   const session = "am" as const;
 
   const db = supabaseAdmin();
@@ -82,10 +91,13 @@ export async function POST(request: Request) {
   }
 
   // 잠금가는 서버가 정한다 — 화면에 떠 있는 값과 같아야 한다
+  /* 오늘 오전가가 아직 안 나온 시간대다. 그동안 몰은 02:00 리셋 그대로 정가이고
+     화면도 정가를 보여준다(engine.ts quoteAt). 정가를 잠그는 것은 보호할 할인이
+     없다는 뜻이라 받지 않는다. */
   const price = await currentPriceOf(productId, date, session);
   if (!price) {
     return Response.json(
-      { error: "오늘 이 상품의 확정가가 아직 없습니다." },
+      { error: "오늘 가격이 아직 나오지 않았어요. 잠시 뒤 다시 시도해주세요." },
       { status: 409 },
     );
   }

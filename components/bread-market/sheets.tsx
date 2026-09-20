@@ -25,6 +25,7 @@ import {
   REWARD_RATE_PCT,
   SESSION_LABEL,
   lockAppliedPriceWon,
+  lockOpensOn,
   lockProtection,
   type Direction,
 } from "@/lib/bread-market/reward-policy";
@@ -151,7 +152,13 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
   const lock = my.lock;
   const phase = lockPhaseOf(lock, now, todayKey);
   const lockUsed = Boolean(lock && lock.dateKey === todayKey);
-  const lockBlocked = lockUsed ? "오늘 잠금 사용 완료" : session !== "am" ? "잠금은 06:00부터" : null;
+  const lockBlocked = lockUsed
+    ? "오늘 잠금 사용 완료"
+    : !lockOpensOn(todayKey)
+      ? "주말 휴장 · 월요일 06:00"
+      : session !== "am"
+        ? "잠금은 06:00부터"
+        : null;
   const lockHere = lock && lock.tk === b.tk && phase === "protecting";
 
   /* 구매는 Cafe24 에서 일어난다. 여기서 "구매했다"고 기록하지 않는다.
