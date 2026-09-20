@@ -84,13 +84,22 @@ export function rewardMessage(outcome: Outcome) {
   return { badge: "미적중", title: "아쉽게 빗나갔어요", ratePct: rate };
 }
 
+/** 예측 할인코드 유효 기간 — 발급 시점부터 24시간. */
+export const PREDICTION_CODE_HOURS = 24;
+
 /**
- * 예측 할인코드 유효 종료 — 발급된 시장일의 오후장 끝(다음 날 새벽 01:59)까지.
- * 아침에 확인하고 저녁 늦게 사는 사람이 쓸 수 있어야 한다. 잠금 쿠폰과 끝나는 시각이 같다.
+ * 예측 할인코드 유효 종료 — 발급 시각 + 24시간.
+ *
+ * 기준이 판정한 시장일이 아니라 발급 시각이다. 그래서 크론이 밀렸다가 뒤늦게
+ * 따라잡아도 이미 지나간 만료 시각이 붙지 않는다 (resolvePredictions 는 지난
+ * 날짜의 pending 도 판정한다).
+ *
+ * 잠금 쿠폰은 이 함수를 쓰지 않는다 — 보호 구간(16:00~다음 날 01:59)이 곧
+ * 유효 기간이라 lock_price_locks 의 protect_from/protect_until 을 그대로 쓴다.
  * 오후 할인율이 올라 합계가 38% 를 살짝 넘는 드문 경우(3개월 기준 1.5% 미만)는 받아들인다.
  */
-export function codeExpiry() {
-  return { dayOffset: 1, time: "01:59", label: "새벽 01:59까지" };
+export function predictionCodeValidUntil(issuedAtIso: string) {
+  return new Date(new Date(issuedAtIso).getTime() + PREDICTION_CODE_HOURS * 3_600_000).toISOString();
 }
 
 /* ───────── 가격 잠금 ───────── */
@@ -103,6 +112,21 @@ export function codeExpiry() {
 export function lockProtection(lockSession: Session) {
   if (lockSession === "am") return { protectSession: "pm" as Session, label: "오늘 16:00–새벽 01:59", until: "01:59" };
   return null;
+}
+
+/**
+ * 잠금을 받는 날인가 — 주말에는 받지 않습니다.
+ *
+ * 주말은 외환시장이 쉬어 당일 시가가 없습니다. 그래서 오후가 크론이 오후가를
+ * 만들지 않고(daily-pricing 의 fx_unavailable 보류), 오후가가 없으면 잠금가와
+ * 비교할 값도 차액 쿠폰도 없습니다. 실데이터 3개월에서 주말 잠금 156건의 보상은
+ * 예외 없이 0건이었습니다 — 하루 한 번뿐인 잠금을 확정적으로 버리게 됩니다.
+ *
+ * 공휴일도 같은 이유로 오후가가 없지만, 휴장일 달력이 없어 여기서는 가리지 못합니다.
+ */
+export function lockOpensOn(dateKey: string) {
+  const weekday = new Date(`${dateKey}T00:00:00Z`).getUTCDay();
+  return weekday !== 0 && weekday !== 6;
 }
 
 /** 잠금 적용가: 손해 보지 않도록 잠금가와 현재가 중 낮은 값 */

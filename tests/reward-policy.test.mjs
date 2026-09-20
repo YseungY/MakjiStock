@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   allowedCouponPct,
-  codeExpiry,
+  PREDICTION_CODE_HOURS,
+  predictionCodeValidUntil,
+  lockOpensOn,
   couponAmountWon,
   effectiveDiscountPct,
   finalCouponPct,
@@ -61,8 +63,23 @@ test("예측 판정과 메시지", () => {
   assert.equal(rewardMessage("hit").ratePct, 5);
 });
 
-test("예측 코드는 오후장 끝(다음 날 01:59)까지 — 저녁 구매자가 쓸 수 있다", () => {
-  assert.deepEqual(codeExpiry(), { dayOffset: 1, time: "01:59", label: "새벽 01:59까지" });
+test("예측 코드는 발급 시각부터 24시간", () => {
+  assert.equal(PREDICTION_CODE_HOURS, 24);
+  assert.equal(
+    predictionCodeValidUntil("2026-09-20T05:10:00.000Z"),
+    "2026-09-21T05:10:00.000Z",
+  );
+});
+
+/* 기준이 판정일이 아니라 발급 시각이어야 한다. 밀린 판정을 뒤늦게 따라잡을 때
+   이미 지나간 만료 시각이 붙으면 발급 즉시 죽은 코드가 나간다. */
+test("밀린 판정을 따라잡아도 만료가 미래다", () => {
+  const 발급 = "2026-09-20T05:10:00.000Z"; // 09-18 분을 이틀 늦게 판정
+  assert.ok(new Date(predictionCodeValidUntil(발급)) > new Date(발급));
+});
+
+test("서머타임·월말이 없어도 24시간은 그냥 24시간", () => {
+  assert.equal(predictionCodeValidUntil("2026-09-30T16:00:00.000Z"), "2026-10-01T16:00:00.000Z");
 });
 
 test("잠금: 오전장에만, 오후장(~01:59)에 보호, 하락 시 현재가", () => {
@@ -74,4 +91,12 @@ test("잠금: 오전장에만, 오후장(~01:59)에 보호, 하락 시 현재가
   assert.equal(lockAppliedPriceWon(3000, 2800), 2800);
   assert.equal(lockCodeAmountWon(3000, 3200), 200);
   assert.equal(lockCodeAmountWon(3000, 2800), 0);
+});
+
+/* 주말은 외환시장이 쉬어 오후가가 없다. 보호할 가격 변동이 없으므로 잠금을 받지 않는다. */
+test("잠금은 평일에만 열린다", () => {
+  assert.equal(lockOpensOn("2026-09-18"), true);  // 금
+  assert.equal(lockOpensOn("2026-09-19"), false); // 토
+  assert.equal(lockOpensOn("2026-09-20"), false); // 일
+  assert.equal(lockOpensOn("2026-09-21"), true);  // 월
 });
