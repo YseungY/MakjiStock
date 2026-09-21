@@ -30,7 +30,9 @@ import { lockPhaseOf } from "@/lib/bread-market/flow";
 import { predictionSchedule } from "@/lib/predictions/schedule";
 import {
   CONSUMER_REWARD_NOTICE,
+  INSTANT_REWARD_PCT,
   SESSION_LABEL,
+  predictionRewardPct,
   lockAppliedPriceWon,
   lockOpensOn,
   lockProtection,
@@ -371,7 +373,7 @@ export function MarketPanel() {
         <button className="predcard" onClick={() => openSheet({ type: "predict" })}>
           <div className="predcard__k">TOMORROW&rsquo;S BREAD</div>
           <h3 className="predcard__t">내일 이 빵, 오를까 내릴까</h3>
-          <p className="predcard__d">틀리지만 않으면 5% 쿠폰. 결과는 06:00 공개</p>
+          <p className="predcard__d">바로 받으면 {INSTANT_REWARD_PCT}% 확정, 내일 맞히면 {predictionRewardPct(`${todayKey}-am`)}%</p>
           <div className="predcard__b">
             <div>
               <b>{pb.name}{joined ? ` · ${joined.direction === "up" ? "오른다" : "내린다"}` : ""}</b>

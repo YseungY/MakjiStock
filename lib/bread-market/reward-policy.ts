@@ -39,7 +39,7 @@ export function sessionOfHour(hour: number): Session {
    미루는 것을 줄이고 기업이 밀고 싶은 빵으로 구매를 모으려는 설계다. */
 
 /** 바로 받기 — 예측을 포기하고 그 자리에서 받는 확정 보상률. */
-export const INSTANT_REWARD_PCT = 5;
+export const INSTANT_REWARD_PCT = 10;
 
 /** 예측 보상률 범위. 이 안에서 회차마다 뽑는다. */
 export const PREDICTION_REWARD_MIN_PCT = 3;
@@ -182,4 +182,6 @@ export function lockCodeAmountWon(lockedPriceWon: number, currentPriceWon: numbe
 }
 
 export const CONSUMER_REWARD_NOTICE =
-  "예측이 틀리지만 않으면 5% 할인코드를 드려요. 상품 할인과 합쳐 최종 혜택은 최대 38%입니다.";
+  `바로 받으면 ${INSTANT_REWARD_PCT}% 할인코드를 드려요. 내일 예측은 틀리지만 않으면 ` +
+  `${PREDICTION_REWARD_MIN_PCT}~${PREDICTION_REWARD_MAX_PCT}% 이고 회차마다 달라져요. ` +
+  "상품 할인과 합쳐 최종 혜택은 최대 38%입니다.";

@@ -125,8 +125,12 @@ test("보상률은 3~10% 안이고 회차마다 갈린다", () => {
   assert.ok(seen.size >= 5, `28회차에 ${seen.size}종만 나왔다 — 한쪽으로 쏠린다`);
 });
 
-test("바로 받기는 확정 5%", () => {
-  assert.equal(INSTANT_REWARD_PCT, 5);
+/* 바로 받기가 예측보다 유리해야 "미루지 말고 지금" 이 성립한다.
+   예측 기대값 = 평균 보상률 × 적중 확률(실측 52.1%) ≈ 6.5 × 0.52 ≈ 3.4%. */
+test("바로 받기는 확정 10% — 예측 기대값보다 확실히 높다", () => {
+  assert.equal(INSTANT_REWARD_PCT, 10);
+  const 평균 = (PREDICTION_REWARD_MIN_PCT + PREDICTION_REWARD_MAX_PCT) / 2;
+  assert.ok(INSTANT_REWARD_PCT > 평균 * 0.521, "바로 받기가 예측 기대값보다 낮으면 미루는 쪽이 이득이다");
 });
 
 /* 약속한 보상률은 적중·무승부에만 준다. 빗나가면 0 이다. */
