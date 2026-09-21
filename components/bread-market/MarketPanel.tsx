@@ -11,6 +11,8 @@ import {
   dirColor,
   fixed,
   fxShownAt,
+  isListPriceAt,
+  isListPriceDay,
   shortOf,
   fxLabel,
   linePath,
@@ -202,7 +204,10 @@ export function MarketPanel() {
   const idxD = (BREADS.reduce((sum, b) => sum + changeAt(b, todayKey, session).amount / b.base, 0) / BREADS.length) * 100;
   const fx = fxShownAt(todayKey, session);
   // 급등주 — 전일 대비 검색지수가 가장 많이 오른 한 종. 아무도 안 올랐으면 없다.
-  const listTime = session === "list"; // 02:00–05:59 정가 시간: 퍼센트 없이 정가만
+  /* 정가면 퍼센트를 떼고 정가만 보여준다. 02:00–05:59 정가 시간이거나, 오늘 가격이
+     아직 안 나온 시간대다 (engine.ts isListPriceAt). */
+  const listTime = isListPriceDay(todayKey, session);
+  const listHour = session === "list"; // 정가 "시간" 인지, 가격이 없어서 정가인지
   const surge = listTime ? null : surgeOf(todayKey, session);
 
   const rows = useMemo(() => {
@@ -246,8 +251,8 @@ export function MarketPanel() {
             <div className="mkthead__d">
               {listTime ? (
                 <>
-                  <b>정가 시간</b>
-                  <span>06:00에 오전가가 나와요</span>
+                  <b>{listHour ? "정가 시간" : "가격 준비 중"}</b>
+                  <span>{listHour ? "06:00에 오전가가 나와요" : "오늘 가격이 아직 나오지 않았어요"}</span>
                 </>
               ) : (
                 <>
@@ -261,7 +266,11 @@ export function MarketPanel() {
         </div>
         <p className="mkthead__note">
           {listTime ? (
-            <>지금은 <b>정가 시간</b>이에요(02:00–05:59). 모든 빵이 정가이고, 06:00에 오전가가 나와요.</>
+            listHour ? (
+              <>지금은 <b>정가 시간</b>이에요(02:00–05:59). 모든 빵이 정가이고, 06:00에 오전가가 나와요.</>
+            ) : (
+              <>오늘 가격이 아직 나오지 않아 <b>정가</b>로 보여드려요. 준비되는 대로 바뀌어요.</>
+            )
           ) : (
             <>
               {session === "pm" ? <><b>02:00부터 정가</b>로 돌아가요 · </> : null}환율 <b className="n">{fxLabel(fx.drop)}</b> ({shortOf(fx.at)} 기준)
@@ -291,7 +300,8 @@ export function MarketPanel() {
       <div className="mktlist" id="mktlist">
         {rows.map(({ b, q, d }) => {
           const c = cls(d.pct);
-          const col = listTime ? dirColor("flat") : dirColor(c);
+          const rowList = isListPriceAt(b, todayKey, session);
+          const col = rowList ? dirColor("flat") : dirColor(c);
           const p = linePath(seriesAt(b, todayKey, 7, session).map((s) => s.q.price), 54, 26, 3);
           const lock = my.lock;
           const lockedHere = Boolean(lock && lock.dateKey === todayKey && lock.tk === b.tk);
@@ -314,7 +324,7 @@ export function MarketPanel() {
                       </em>
                     ) : null}
                   </b>
-                  <span><em>{b.tk}</em> 정가 {listTime ? <span className="n">{won(b.base)}원</span> : <s className="n">{won(b.base)}원</s>}</span>
+                  <span><em>{b.tk}</em> 정가 {rowList ? <span className="n">{won(b.base)}원</span> : <s className="n">{won(b.base)}원</s>}</span>
                   <svg className="quote__sp" viewBox="0 0 54 26" preserveAspectRatio="none" aria-hidden="true">
                     <path d={p.d} fill="none" stroke={col} strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
                     <circle cx={p.lx.toFixed(1)} cy={p.ly.toFixed(1)} r="2" fill={col} />
@@ -323,7 +333,7 @@ export function MarketPanel() {
               </button>
               <button className="quote__rt" onClick={() => openSheet({ type: "detail", tk: b.tk })} aria-label={`${b.name} ${won(q.price)}원 상세 보기`}>
                 <b className="quote__p n"><RollingNumber value={q.price} /></b>
-                {listTime ? (
+                {rowList ? (
                   <em className="quote__d flat">정가</em>
                 ) : (
                   <em className={`quote__d n ${c}`} title={`직전 ${won(d.previousPrice)}원 대비 ${signed(d.amount, 0)}원`}>

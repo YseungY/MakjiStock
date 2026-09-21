@@ -49,3 +49,19 @@ test("정가로 떨어진 장에는 지난 장의 등락을 붙이지 않는다"
   assert.equal(signed(-0.02), "0.0");
   assert.equal(signed(-0.06), "−0.1");
 });
+
+/* 정가에는 등락을 붙이지 않는다. 퍼센트를 붙이면 정가 복귀가 가격 인상으로 읽힌다 —
+   2026-09-21 오전에 실제로 "▲ +8.7%" 가 세 시간 넘게 떠 있었다. */
+test("그날 확정가가 없으면 정가로 본다 — 등락을 감추는 기준", async () => {
+  const { isListPriceAt, isListPriceDay } = await import("../lib/bread-market/engine.ts");
+  // 행이 있는 날
+  assert.equal(isListPriceAt(b, "2026-09-18", "am"), false);
+  // 행이 없는 날 → 정가
+  assert.equal(isListPriceAt(b, "2026-09-30", "am"), true);
+  assert.equal(isListPriceDay("2026-09-30", "am"), true);
+});
+
+test("02:00~05:59 정가 시간은 행이 있어도 정가다", async () => {
+  const { isListPriceAt } = await import("../lib/bread-market/engine.ts");
+  assert.equal(isListPriceAt(b, "2026-09-18", "list"), true);
+});

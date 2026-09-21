@@ -7,6 +7,7 @@ import {
   BREADS,
   arrow,
   changeAt,
+  isListPriceAt,
   cls,
   fixed,
   fxShownAt,
@@ -95,15 +96,15 @@ function Tape({ todayKey, session }: { todayKey: string; session: Session }) {
   const items = BREADS.map((b) => {
     const q = quoteAt(b, todayKey, session);
     const d = changeAt(b, todayKey, session);
-    return { b, q, d };
+    return { b, q, d, listPrice: isListPriceAt(b, todayKey, session) };
   });
   const seg = (k: string) =>
-    items.map(({ b, q, d }) => (
+    items.map(({ b, q, d, listPrice }) => (
       <span className="tape__i" key={`${k}-${b.tk}`}>
         <b>{b.tk}</b>
         <s className="n">{won(q.price)}</s>
-        {/* 정가 시간에는 등락을 보여주지 않는다 — 모든 빵이 정가다 */}
-        {session === "list" ? null : (
+        {/* 정가에는 등락을 붙이지 않는다 — 오늘 가격이 아직 없다는 뜻이다 */}
+        {listPrice ? null : (
           <em className={`${cls(d.pct)} n`}>
             {arrow(d.pct)} {signed(d.pct)}%
           </em>

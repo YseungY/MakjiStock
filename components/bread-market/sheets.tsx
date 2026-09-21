@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   breadOf,
   changeAt,
+  isListPriceAt,
   cls,
   dirColor,
   discCls,
@@ -123,7 +124,7 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
   const b = breadOf(tk);
   const q = quoteAt(b, todayKey, session);
   const ch = changeAt(b, todayKey, session);
-  const listTime = session === "list";
+  const listTime = isListPriceAt(b, todayKey, session);
   const ser = sessionSeries(b, todayKey, 14, session);
   const p = linePath(ser.map((s) => s.q.price), 300, 96, 6);
   const [hover, setHover] = useState<number | null>(null);

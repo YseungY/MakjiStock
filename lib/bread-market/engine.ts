@@ -434,6 +434,25 @@ export function quoteAt(bread: Bread, key: string, session: PriceSession): Quote
   return quoteWith(bread, key, session === "pm" ? fxDropPmOf(key) : fxDropOf(key));
 }
 
+/** 지금 화면에 뜬 값이 정가인가 — 02:00~05:59 정가 시간이거나, 그 장의 확정가가
+    아직 없어 정가로 떨어진 경우다.
+
+    정가에는 등락을 붙이지 않는다. "얼마에서 얼마로 움직였다"가 아니라 "아직 오늘
+    가격이 없다"는 뜻이라, 퍼센트를 붙이면 정가 복귀가 가격 인상으로 읽힌다.
+    실제로 2026-09-21 오전에 화면이 "▲ +8.7%" 로 세 시간 넘게 떠 있었다.
+    docs/네이버-검색지수-도착시각.md
+
+    실시세를 하나도 못 받은 로컬 데모는 시드 값을 쓰므로 정가가 아니다. */
+export function isListPriceAt(bread: Bread, key: string, session: PriceSession) {
+  if (session === "list") return true;
+  return hasRealData() && realSlotOnDay(bread.tk, key, session) === null;
+}
+
+/** 6종이 모두 정가인가 — 지수·테이프처럼 한 덩어리로 보여주는 곳에서 쓴다. */
+export function isListPriceDay(key: string, session: PriceSession) {
+  return BREADS.every((b) => isListPriceAt(b, key, session));
+}
+
 /** 직전 확정가: 오전장 ← 전날 오후가, 오후장 ← 오늘 오전가, 정가 시간(02:00–05:59) ← 전날 오후가.
     시장 날짜는 02:00 에 바뀌므로 정가 시간에는 오늘 오후가가 아직 없다. */
 export function previousQuoteAt(bread: Bread, key: string, session: PriceSession): Quote {
