@@ -172,3 +172,52 @@ export async function loadPredictions(): Promise<ServerPredictionRow[]> {
     reward: codes.get(e.id) ?? null,
   }));
 }
+
+export type InstantReward = {
+  roundId: string;
+  code: string;
+  amountWon: number | null;
+  ratePct: number;
+  validUntil: string | null;
+};
+
+/**
+ * 바로 받기로 받은 쿠폰. 예측 보상·잠금 차액과 달리 회차에만 묶여 있어
+ * (reward_claims.round_id) 예측 목록 조회로는 잡히지 않는다.
+ *
+ * 쓸 수 있는 것만 내려보낸다 — 만료된 코드를 복사하면 결제 직전에야 안다.
+ */
+export async function loadInstantRewards(): Promise<InstantReward[]> {
+  const visitorHash = await readVisitorHash();
+  if (!visitorHash) return [];
+
+  const { data, error } = await supabaseAdmin()
+    .from("reward_claims")
+    .select("round_id,rate_pct,amount_won,discount_code_ciphertext,valid_from,valid_until")
+    .eq("visitor_hash", visitorHash)
+    .not("round_id", "is", null)
+    .order("sent_at", { ascending: false })
+    .limit(5);
+  if (error) throw new Error(error.message);
+
+  const now = Date.now();
+  const out: InstantReward[] = [];
+  for (const claim of data ?? []) {
+    if (!claim.discount_code_ciphertext) continue;
+    const started = claim.valid_from ? new Date(claim.valid_from).getTime() <= now : true;
+    const expired = claim.valid_until ? new Date(claim.valid_until).getTime() <= now : false;
+    if (!started || expired) continue;
+    try {
+      out.push({
+        roundId: claim.round_id as string,
+        code: decryptSecret(claim.discount_code_ciphertext),
+        amountWon: claim.amount_won,
+        ratePct: claim.rate_pct,
+        validUntil: claim.valid_until,
+      });
+    } catch {
+      // 키가 바뀌었거나 값이 깨진 경우. 나머지는 그대로 보여준다.
+    }
+  }
+  return out;
+}

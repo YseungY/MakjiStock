@@ -43,7 +43,7 @@ function CouponCode({ code, note }: { code: string; note?: string }) {
 }
 
 export function MyPanel() {
-  const { todayKey, openSheet, predictions: preds, lock: server } = useBreadMarket();
+  const { todayKey, openSheet, predictions: preds, lock: server, instantRewards } = useBreadMarket();
 
   const my = useBreadState();
   const now = useSession();
@@ -52,7 +52,7 @@ export function MyPanel() {
      할인코드. 유효기간이 지난 코드는 서버가 code 를 비워 내려주고(visitor-data.ts),
      그 줄은 여기서 통째로 사라진다. 다 지나가면 빈 상태로 돌아간다. */
   const live = preds.filter((p) => p.result === "pending" || p.reward?.code);
-  const codes = live.filter((p) => p.reward?.code).length + (server.discountCode ? 1 : 0);
+  const codes = live.filter((p) => p.reward?.code).length + (server.discountCode ? 1 : 0) + instantRewards.length;
   /* 잠금은 서버가 정본이다. localStorage 는 서버 응답이 오기 전에만 쓴다.
      브라우저 기록을 지워도 쿠키가 남아 서버에는 잠금이 그대로 있다.
      로컬만 보면 "잠근 빵이 없어요"라고 해놓고 다시 잠글 때 409 가 난다. */
@@ -68,7 +68,7 @@ export function MyPanel() {
     : my.lock;
   const phase = lockPhaseOf(lock, now, todayKey);
   const lockBread = lock?.tk ? breadOf(lock.tk) : null;
-  const activity = live.length + (lock ? 1 : 0);
+  const activity = live.length + (lock ? 1 : 0) + instantRewards.length;
   const lead = activity === 0 ? "시작해볼까요" : codes > 0 ? "할인코드 도착" : "기록 중";
 
   return (
@@ -131,7 +131,19 @@ export function MyPanel() {
       <div className="sect">
         <div className="sect__h"><h3 className="sect__t">예측과 할인코드</h3></div>
         <div className="mylist">
-          {live.length === 0 ? (
+          {/* 바로 받기 쿠폰. 예측이 아니라 회차에 묶여 있어 목록과 출처가 다르다. */}
+          {instantRewards.map((r) => (
+            <div className="myrow myrow--stack" key={r.roundId}>
+              <div className="myrow__top">
+                <div className="myrow__t">
+                  <b>바로 받기 · {r.ratePct}% 할인코드</b>
+                  <span>오늘 예측 대신 받았어요</span>
+                </div>
+              </div>
+              <CouponCode code={r.code} note={r.amountWon ? `${won(r.amountWon)}원` : undefined} />
+            </div>
+          ))}
+          {live.length === 0 && instantRewards.length === 0 ? (
             <div className="empty">
               <i aria-hidden="true">🧭</i>
               <b>아직 예측 기록이 없어요</b>

@@ -914,3 +914,19 @@ body{display:grid;place-items:center}
   font-size:13px;font-weight:800;letter-spacing:-.03em;
   color:var(--gold);vertical-align:middle;
 }
+
+/* 예측 리스크/리워드 선택 — 확정 5% 와 회차 보상률 중 하나를 고른다. */
+.riskpick{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:16px}
+.riskpick__b{
+  display:grid;gap:2px;padding:16px 12px;border-radius:14px;
+  border:1px solid var(--line);background:#fff;text-align:center;
+  transition:transform .16s var(--spring), border-color .2s;
+}
+.riskpick__b:active{transform:scale(.985)}
+.riskpick__b:disabled{opacity:.5}
+.riskpick__b em{font-style:normal;font-size:10.5px;font-weight:800;color:var(--ink-3);letter-spacing:-.02em}
+.riskpick__b b{font-size:30px;font-weight:800;letter-spacing:-.05em;line-height:1.1;color:var(--ink)}
+.riskpick__b span{font-size:10.5px;color:var(--ink-3);line-height:1.5}
+.riskpick__b--bet{border-color:var(--blue-line);background:var(--blue-soft)}
+.riskpick__b--bet b{color:var(--blue-deep)}
+.riskpick__b--bet em{color:var(--blue)}

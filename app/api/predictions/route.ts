@@ -1,3 +1,4 @@
+import { predictionRewardPct } from "@/lib/bread-market/reward-policy";
 import { currentPriceOf } from "@/lib/pricing/current-price";
 import { kstNow } from "@/lib/market/calendar";
 import { predictionSchedule } from "@/lib/predictions/schedule";
@@ -21,7 +22,7 @@ export const dynamic = "force-dynamic";
 
    기준가는 클라이언트가 보내지 않는다. 서버가 daily_prices 에서 읽는다. */
 
-const RATE_HIT_PCT = 3; // 일반 적중 (PRD §4.3)
+
 
 /** 화면은 티커로 생각한다. 상품 id 는 서버가 찾는다. */
 async function tickerToProductId(ticker: string): Promise<string | null> {
@@ -103,6 +104,25 @@ export async function POST(request: Request) {
   if (roundError) return Response.json({ error: roundError.message }, { status: 502 });
 
   const visitorHash = await getOrCreateVisitorHash();
+
+  // 이 회차에 바로 받기로 이미 쿠폰을 받았으면 예측을 줄 수 없다. 하루 한 번을 나눠 쓴다.
+  const { data: taken } = await db
+    .from("reward_claims")
+    .select("id")
+    .eq("round_id", roundId)
+    .eq("visitor_hash", visitorHash)
+    .maybeSingle();
+  if (taken) {
+    return Response.json(
+      { error: "이번 회차에는 이미 할인코드를 받았어요. 다음 장에 예측할 수 있어요." },
+      { status: 409 },
+    );
+  }
+
+  /* 약속 보상률은 제출 시점에 못 박는다. 회차에서 결정론적으로 뽑은 값이라
+     화면에 보여준 값과 같고, 나중에 규칙이 바뀌어도 이미 건 사람의 조건은 그대로다. */
+  const promisedPct = predictionRewardPct(roundId);
+
   const { data: entry, error } = await db
     .from("prediction_entries")
     .insert({
@@ -115,7 +135,7 @@ export async function POST(request: Request) {
       target_publish_date: target.targetDate,
       target_session: target.targetSession,
       result: "pending",
-      reward_rate_pct: 0,
+      reward_rate_pct: promisedPct,
     })
     .select("id,product_id,direction,reference_price_won,target_publish_date,target_session,result")
     .single();
@@ -132,7 +152,7 @@ export async function POST(request: Request) {
   }
 
   return Response.json(
-    { entry, targetLabel: target.label, rewardOnHitPct: RATE_HIT_PCT },
+    { entry, targetLabel: target.label, rewardOnHitPct: promisedPct },
     { status: 201 },
   );
 }

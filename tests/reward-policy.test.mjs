@@ -2,7 +2,12 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   allowedCouponPct,
+  INSTANT_REWARD_PCT,
   PREDICTION_CODE_HOURS,
+  PREDICTION_REWARD_MAX_PCT,
+  PREDICTION_REWARD_MIN_PCT,
+  predictionRewardPct,
+  rewardPctFor,
   predictionCodeValidUntil,
   lockOpensOn,
   couponAmountWon,
@@ -99,4 +104,34 @@ test("잠금은 평일에만 열린다", () => {
   assert.equal(lockOpensOn("2026-09-19"), false); // 토
   assert.equal(lockOpensOn("2026-09-20"), false); // 일
   assert.equal(lockOpensOn("2026-09-21"), true);  // 월
+});
+
+/* 예측 보상률은 회차마다 3~10% 에서 달라진다. 회차 id 로 결정론적으로 뽑아야
+   화면에 보인 값과 저장되는 값이 같고, 10 이 나올 때까지 새로고침할 수 없다. */
+test("같은 회차는 언제 물어도 같은 보상률", () => {
+  const a = predictionRewardPct("2026-09-21-am");
+  assert.equal(predictionRewardPct("2026-09-21-am"), a);
+  assert.equal(predictionRewardPct("2026-09-21-am"), a);
+});
+
+test("보상률은 3~10% 안이고 회차마다 갈린다", () => {
+  const seen = new Set();
+  for (let d = 1; d <= 28; d += 1) {
+    const pct = predictionRewardPct(`2026-09-${String(d).padStart(2, "0")}-am`);
+    assert.ok(pct >= PREDICTION_REWARD_MIN_PCT && pct <= PREDICTION_REWARD_MAX_PCT, `${pct} 가 범위 밖`);
+    assert.equal(pct, Math.trunc(pct));
+    seen.add(pct);
+  }
+  assert.ok(seen.size >= 5, `28회차에 ${seen.size}종만 나왔다 — 한쪽으로 쏠린다`);
+});
+
+test("바로 받기는 확정 5%", () => {
+  assert.equal(INSTANT_REWARD_PCT, 5);
+});
+
+/* 약속한 보상률은 적중·무승부에만 준다. 빗나가면 0 이다. */
+test("판정은 제출 때 약속한 값을 쓴다", () => {
+  assert.equal(rewardPctFor("hit", 9), 9);
+  assert.equal(rewardPctFor("void", 9), 9);
+  assert.equal(rewardPctFor("miss", 9), 0);
 });

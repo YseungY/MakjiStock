@@ -1,8 +1,8 @@
 import {
-  REWARD_RATE_PCT,
   couponAmountWon,
   predictionCodeValidUntil,
   resolveDirection,
+  rewardPctFor,
 } from "@/lib/bread-market/reward-policy";
 import { encryptSecret } from "@/lib/crypto";
 import { currentPriceOf } from "@/lib/pricing/current-price";
@@ -29,6 +29,7 @@ type EntryRow = {
   product_id: string;
   direction: "up" | "down";
   reference_price_won: number;
+  reward_rate_pct: number;
   target_publish_date: string;
   products: { ticker: string; base_price_won: number; cafe24_product_no: number | null } | null;
 };
@@ -71,7 +72,7 @@ export async function resolvePredictions({
   const { data, error } = await db
     .from("prediction_entries")
     .select(
-      "id,visitor_hash,product_id,direction,reference_price_won,target_publish_date,products(ticker,base_price_won,cafe24_product_no)",
+      "id,visitor_hash,product_id,direction,reference_price_won,reward_rate_pct,target_publish_date,products(ticker,base_price_won,cafe24_product_no)",
     )
     .eq("role", "general")
     .eq("result", "pending")
@@ -94,7 +95,8 @@ export async function resolvePredictions({
     if (resultPrice === null) continue; // 그 상품만 보류. 다음 실행에서 다시 본다.
 
     const outcome = resolveDirection(entry.direction, entry.reference_price_won, resultPrice);
-    const ratePct = REWARD_RATE_PCT[outcome];
+    /* 제출 때 약속한 보상률을 쓴다. 회차마다 다르므로 지금 다시 뽑으면 안 된다. */
+    const ratePct = rewardPctFor(outcome, entry.reward_rate_pct);
     const base = {
       ticker,
       entryId: entry.id,

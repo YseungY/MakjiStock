@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext } from "react";
-import type { LockData, ServerPredictionRow } from "@/lib/bread-market/visitor-data";
+import type { InstantReward, LockData, ServerPredictionRow } from "@/lib/bread-market/visitor-data";
 
 export type SheetState =
   | { type: "detail"; tk: string }
@@ -21,6 +21,8 @@ export type BreadMarketCtx = {
   refreshPredictions: () => void;
   /* 이 브라우저의 오늘 잠금. 서버가 정본이고 첫 HTML 에 이미 들어 있다. */
   lock: LockData;
+  /** 바로 받기로 받은, 아직 쓸 수 있는 쿠폰. 예측 목록과 출처가 달라 따로 온다. */
+  instantRewards: InstantReward[];
   openSheet: (s: SheetState) => void;
   toast: (icon: string, title: string, desc?: string) => void;
 };

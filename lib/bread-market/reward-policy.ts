@@ -34,6 +34,48 @@ export function sessionOfHour(hour: number): Session {
   return "list";
 }
 
+/* 예측 보상률은 회차마다 달라진다 (3~10%). 즉시 수령은 5% 고정이다.
+   "지금 5% 확정" 과 "내일 맞히면 ?%" 중에 고르게 해서, 예측 때문에 구매를
+   미루는 것을 줄이고 기업이 밀고 싶은 빵으로 구매를 모으려는 설계다. */
+
+/** 바로 받기 — 예측을 포기하고 그 자리에서 받는 확정 보상률. */
+export const INSTANT_REWARD_PCT = 5;
+
+/** 예측 보상률 범위. 이 안에서 회차마다 뽑는다. */
+export const PREDICTION_REWARD_MIN_PCT = 3;
+export const PREDICTION_REWARD_MAX_PCT = 10;
+
+/* 회차 id 로 결정론적으로 뽑는다. 요청마다 새로 뽑으면 화면에 보인 값과 저장되는
+   값이 달라지고, 10 이 나올 때까지 새로고침할 수 있다. 서버와 화면이 같은 함수를
+   써서 같은 값을 말한다 — 서버는 제출 시점에 다시 계산해 저장하므로 위조도 막힌다. */
+function seedOf(text: string) {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/**
+ * 그 회차의 예측 보상률(%). 같은 회차면 누가 언제 물어도 같은 값이다.
+ * @param roundId `prediction_rounds.id` — `${시장날짜}-${판정세션}`
+ */
+export function predictionRewardPct(roundId: string) {
+  const span = PREDICTION_REWARD_MAX_PCT - PREDICTION_REWARD_MIN_PCT + 1;
+  return PREDICTION_REWARD_MIN_PCT + (seedOf(`reward@${roundId}`) % span);
+}
+
+/**
+ * 판정 결과에 실제로 줄 보상률. 약속한 값은 적중·무승부에만 주고 빗나가면 0 이다.
+ * 약속값은 제출 시점에 prediction_entries.reward_rate_pct 에 저장된다 — 나중에
+ * 회차 규칙이 바뀌어도 이미 건 사람의 조건은 그대로다.
+ */
+export function rewardPctFor(outcome: Outcome, promisedPct: number) {
+  return outcome === "miss" ? 0 : promisedPct;
+}
+
+/** @deprecated 회차마다 달라진다. rewardPctFor 를 쓸 것. 문구·테스트 호환으로 남긴다. */
 export const REWARD_RATE_PCT: Record<Outcome, number> = { hit: 5, miss: 0, void: 5 };
 
 /** 판매가 할인율 D(%) — 10원 반올림 후 실제 판매가로 다시 계산합니다. 정가를 넘지 않아 0 이상. */
