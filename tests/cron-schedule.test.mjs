@@ -24,23 +24,25 @@ function cronFor(pathPrefix) {
   return found;
 }
 
-test("크론은 정가 리셋 · 오전가 · 오전가 따라잡기 4 · 오후가 7개다", () => {
+test("크론은 정가 리셋 · 오전가 · 오전가 따라잡기 5 · 오후가 8개다", () => {
   // Hobby·Pro 모두 프로젝트당 100개까지다. 개수는 제약이 아니다.
-  assert.equal(vercelConfig.crons.length, 7);
+  assert.equal(vercelConfig.crons.length, 8);
 });
 
 /* 오전가 본 실행은 05시대에 돌지만, 그때 네이버 D-1 검색지수가 아직 없으면
    가격을 만들지 않고 보류한다(route.ts). 보류하면 그날 오전가가 영영 안 생기므로
    06·07시대에 따라잡기를 건다. 이미 만든 상품은 onlyIfMissing 이 건너뛴다 —
    공개된 가격을 나중 실행이 덮어쓰면 화면에 떴던 값과 달라진다. */
-test("오전가 따라잡기는 공개 뒤 06~09시대에 있고 onlyIfMissing 이 붙어 있다", () => {
-  /* 네이버 도착 시각이 아직 05:21~09:30 구간까지만 좁혀져 있다
-     (docs/네이버-검색지수-도착시각.md). 그 구간을 시간마다 덮는다. */
+test("오전가 따라잡기는 공개 뒤 06~10시대에 있고 onlyIfMissing 이 붙어 있다", () => {
+  /* 2026-09-21 관측으로 네이버 도착이 08:16~09:09 사이로 좁혀졌다. Hobby 는
+     그 시간대 안 아무 때나 돌므로 09시 회차가 09:00 정각에 걸리면 놓칠 수 있다.
+     10시 회차가 있으면 늦어도 11:00 전에는 채워진다.
+     docs/네이버-검색지수-도착시각.md */
   const retries = cronFor("/api/internal/daily-pricing?session=am&onlyIfMissing=1");
-  assert.equal(retries.length, 4);
+  assert.equal(retries.length, 5);
   assert.deepEqual(
     retries.map((c) => kstHourOf(c.schedule)).sort((a, b) => a - b),
-    [6, 7, 8, 9],
+    [6, 7, 8, 9, 10],
   );
 });
 

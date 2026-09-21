@@ -26,6 +26,10 @@
       "schedule": "0 0 * * *"
     },
     {
+      "path": "/api/internal/daily-pricing?session=am&onlyIfMissing=1",
+      "schedule": "0 1 * * *"
+    },
+    {
       "path": "/api/internal/daily-pricing?session=pm",
       "schedule": "0 6 * * *"
     }
