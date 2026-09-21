@@ -148,7 +148,7 @@ const PHASE_TEXT = {
 };
 
 function LockCard({ todayKey }: { todayKey: string }) {
-  const { openSheet } = useBreadMarket();
+  const { openSheet, lock: server } = useBreadMarket();
   const my = useBreadState();
   const now = useSession();
   const session = now.session;
@@ -179,9 +179,13 @@ function LockCard({ todayKey }: { todayKey: string }) {
         <b>{b.name}</b>
         <span className="n">잠금가 {won(lock.lockedPrice)}원 · 현재 {won(nowPrice)}원</span>
         <small>
+          {/* 쿠폰이 실제로 발급됐는지는 서버만 안다. 가격 차이만 보고 "차액 쿠폰 N원"
+              이라고 하면 크론이 늦거나 보류된 날 없는 쿠폰을 약속하게 된다. */}
           {phase === "protecting"
             ? nowPrice > lock.lockedPrice
-              ? `${won(applied)}원에 살 수 있어요 (차액 쿠폰 ${won(nowPrice - lock.lockedPrice)}원) · 02:00 정가 전에 사세요`
+              ? server.discountCode
+                ? `${won(applied)}원에 살 수 있어요 (차액 쿠폰 ${won(server.lock?.lock_code_amount_won ?? nowPrice - lock.lockedPrice)}원) · 02:00 정가 전에 사세요`
+                : "오후가가 올랐어요. 차액 쿠폰을 만들고 있어요 — 잠시 후 MY 에서 확인하세요."
               : "오후가가 더 싸요. 02:00 정가로 돌아가기 전에 사세요."
             : phase === "purchased"
               ? `구매 완료 · ${won(applied)}원`

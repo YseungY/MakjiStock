@@ -64,13 +64,20 @@ export async function loadLock(): Promise<LockData> {
   if (data.reward_claim_id) {
     const { data: claim } = await db
       .from("reward_claims")
-      .select("discount_code_ciphertext,valid_until,status")
+      .select("discount_code_ciphertext,valid_from,valid_until,status")
       .eq("id", data.reward_claim_id)
       .maybeSingle();
-    /* 잠금 쿠폰은 보호 구간(~다음 날 01:59)과 함께 끝난다. 시장 날짜가 02:00 에
-       바뀌면서 이 조회에서 저절로 빠지지만, 그 맞물림에 기대지 않고 직접 본다. */
-    const expired = claim?.valid_until ? new Date(claim.valid_until).getTime() <= Date.now() : false;
-    if (claim?.discount_code_ciphertext && !expired) {
+    /* 보호 구간(16:00~다음 날 01:59) 안에서만 코드를 내려보낸다.
+
+       끝: 시장 날짜가 02:00 에 바뀌며 이 조회에서 저절로 빠지지만 그 맞물림에
+       기대지 않고 직접 본다.
+       시작: 오후가 크론은 15시대에 돌아 16:00 공개를 준비한다. 그래서 16:00 전에
+       이미 쿠폰이 발급돼 있는데, 그때 보여주면 몰에서 아직 쓸 수 없는 코드를
+       쥐여주는 것이고 차액으로 오후가까지 역산된다. */
+    const now = Date.now();
+    const started = claim?.valid_from ? new Date(claim.valid_from).getTime() <= now : true;
+    const expired = claim?.valid_until ? new Date(claim.valid_until).getTime() <= now : false;
+    if (claim?.discount_code_ciphertext && started && !expired) {
       try {
         discountCode = decryptSecret(claim.discount_code_ciphertext);
         validUntil = claim.valid_until;
