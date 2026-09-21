@@ -18,7 +18,7 @@ next-env.d.ts
 .omx/
 .vercel/
 
-# 네이버 지수 도착 시각 측정 로그 (scripts/naver-lag-probe.mjs)
-naver-lag.tsv
+# 가격 입력 도착 시각 측정 로그 (scripts/price-input-probe.mjs)
+price-input-lag.tsv
 .vercel
 .env*

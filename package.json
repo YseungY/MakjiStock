@@ -16,7 +16,7 @@
     "test:pricing": "node --test tests/*.test.mjs",
     "test:backtest": "node --test backtest/test/*.test.mjs",
     "backtest": "node backtest/run.mjs",
-    "probe:naver": "node scripts/naver-lag-probe.mjs",
+    "probe:inputs": "node scripts/price-input-probe.mjs",
     "simulate:pricing": "node scripts/simulate-pricing.mjs"
   },
   "dependencies": {
