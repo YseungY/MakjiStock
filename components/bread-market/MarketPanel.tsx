@@ -305,6 +305,10 @@ export function MarketPanel() {
         {rows.map(({ b, q, d }) => {
           const c = cls(d.pct);
           const rowList = isListPriceAt(b, todayKey, session);
+          /* 화살표·색은 직전 확정가 대비 등락(상승 빨강·하락 파랑), 숫자는 정가 대비
+             할인율이다. 소비자가 결정에 쓰는 값은 "어제보다 얼마 움직였나" 가 아니라
+             "정가에서 얼마 빠졌나" 다. 산식 상 판매가가 정가를 넘지 않으므로 0 이상이다. */
+          const offPct = Math.max(0, -q.vsBase);
           const col = rowList ? dirColor("flat") : dirColor(c);
           const p = linePath(seriesAt(b, todayKey, 7, session).map((s) => s.q.price), 54, 26, 3);
           const lock = my.lock;
@@ -340,8 +344,11 @@ export function MarketPanel() {
                 {rowList ? (
                   <em className="quote__d flat">정가</em>
                 ) : (
-                  <em className={`quote__d n ${c}`} title={`직전 ${won(d.previousPrice)}원 대비 ${signed(d.amount, 0)}원`}>
-                    {arrow(d.pct)} {signed(d.pct)}%
+                  <em
+                    className={`quote__d n ${c}`}
+                    title={`정가 ${won(b.base)}원 대비 ${fixed(offPct)}% 할인 · 직전 ${won(d.previousPrice)}원 대비 ${signed(d.amount, 0)}원 (${signed(d.pct)}%)`}
+                  >
+                    {arrow(d.pct)} {fixed(offPct)}%
                   </em>
                 )}
               </button>
