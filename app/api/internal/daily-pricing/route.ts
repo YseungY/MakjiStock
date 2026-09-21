@@ -3,7 +3,7 @@ import { CAFE24_WRITES_ENABLED, cafe24Request, cafe24ShopNo } from "@/lib/cafe24
 import { issueLockCodes, type IssueResult } from "@/lib/locks/lock-codes";
 import { resolvePredictions, type ResolveResult } from "@/lib/predictions/resolve";
 import { addDays, kstToday } from "@/lib/pricing/dates.mjs";
-import { marginCapPct, pickPreviousPrices, resolveSession } from "@/lib/pricing/daily-job";
+import { marginCapPct, pickPreviousPrices, resolveSession, searchSignalDateOf } from "@/lib/pricing/daily-job";
 import { fetchUsdKrwOpenCloseRates } from "@/lib/pricing/fx.mjs";
 import { fetchTrendsSeparately } from "@/lib/pricing/naver.mjs";
 import {
@@ -148,7 +148,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
     }
 
     // ── 수집 ────────────────────────────────────────────────
-    const signalDate: string = addDays(publishDate, -1);
+    const signalDate: string = searchSignalDateOf(publishDate);
     const searchStart: string = addDays(signalDate, -(SEARCH_WINDOW_DAYS - 1));
 
     const trends = await fetchTrendsSeparately({
@@ -210,7 +210,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
         return {
           product,
           status: "held" as const,
-          reason: `검색지수 미도착 — D-1(${signalDate}) 없음, ${search.sourceDate} 이월값뿐`,
+          reason: `검색지수 미도착 — ${signalDate} 없음, ${search.sourceDate} 이월값뿐`,
         };
       }
       const cap = marginCapPct(product, pricing.discountCapPct);

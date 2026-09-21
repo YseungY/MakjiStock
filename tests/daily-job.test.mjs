@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { marginCapPct, pickPreviousPrices } from "../lib/pricing/daily-job.ts";
+import { marginCapPct, pickPreviousPrices, searchSignalDateOf } from "../lib/pricing/daily-job.ts";
 
 /* 크론이 가격을 만들기 전에 내리는 판단들. 틀리면 잘못된 가격이 몰에 나간다. */
 
@@ -73,4 +73,21 @@ test("상품마다 따로 고른다", () => {
 
 test("이력이 없으면 빈 Map 이다 — 등락률은 '-' 가 된다", () => {
   assert.equal(pickPreviousPrices([]).size, 0);
+});
+
+/* 검색지수 날짜. D-1 은 오전가 크론(05:30 KST) 시점에 아직 안 올라와 있다 —
+   네이버는 08~09시대에 올린다. docs/네이버-검색지수-도착시각.md */
+test("검색지수는 D-2 를 쓴다 — 산정 시점에 항상 있는 값", () => {
+  assert.equal(searchSignalDateOf("2026-09-22"), "2026-09-20");
+  assert.equal(searchSignalDateOf("2026-09-21"), "2026-09-19");
+});
+
+test("연속한 공개일은 서로 다른 지수 날짜를 쓴다 — 같은 값이 겹치면 0% 가 된다", () => {
+  const a = searchSignalDateOf("2026-09-21");
+  const b = searchSignalDateOf("2026-09-22");
+  assert.notEqual(a, b);
+});
+
+test("월초를 넘어가도 날짜가 맞는다", () => {
+  assert.equal(searchSignalDateOf("2026-10-01"), "2026-09-29");
 });

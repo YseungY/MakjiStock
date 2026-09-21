@@ -4,7 +4,28 @@
    테스트하기 어렵지만, 틀리면 가격이 잘못 나가는 판단은 전부 여기 있다.
    tests/cron-session.test.mjs · tests/daily-job.test.mjs 가 고정한다. */
 
+import { addDays } from "./dates.mjs";
+
 export type Session = "am" | "pm";
+
+/** 검색 창 끝 — 네이버 데이터랩이 몇 일 전 것까지 확실히 주는가. */
+const SEARCH_SIGNAL_LAG_DAYS = 2;
+
+/**
+ * 가격에 넣을 검색지수의 날짜.
+ *
+ * D-1 을 쓰면 오전가 크론(05:30 KST)이 늘 헛돈다 — 네이버는 전날 지수를 08~09시대에
+ * 올린다(docs/네이버-검색지수-도착시각.md). 없으면 직전 관측치로 이월되는데, 그러면
+ * 전날 계산과 입력이 같아져 같은 가격이 나오고 화면에는 "새 가격 0%" 로 보인다.
+ * 2026-09-20 이 그랬다.
+ *
+ * D-2 는 산정 시점에 20시간쯤 전에 올라온 값이라 항상 있다. 매일 하루씩 밀려가므로
+ * 연속한 날이 같은 지수를 쓰는 일도 없다 — 실데이터 546쌍 중 98.2%가 서로 다르다.
+ * 오전·오후가 같은 날짜를 써야 예측이 검색과 환율을 함께 겨루는 게임으로 남는다.
+ */
+export function searchSignalDateOf(publishDate: string): string {
+  return addDays(publishDate, -SEARCH_SIGNAL_LAG_DAYS);
+}
 
 /**
  * 어느 장의 가격을 만들지 정한다.
