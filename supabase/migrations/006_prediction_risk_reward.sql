@@ -1,8 +1,8 @@
 -- 예측에 리스크/리워드 선택을 붙인다.
---   ① 바로 받기  — 5% 쿠폰 즉시 발급, 오늘 회차를 소진한다
---   ② 내일 맞히기 — 적중·무승부면 3~10% 쿠폰. 회차마다 확률이 달라진다
+--   ① 안정형 투자(바로 받기)  — 10~15% 중 오늘 값. 고르기 전에 숫자가 보인다
+--   ② 공격형 투자(내일 맞히기) —  5~20% 중 하나. 걸 때는 "?" 이고 결과가 나와야 안다
 --
--- 1. 보상률 범위를 넓힌다. (0,5) 고정이던 것을 0~10 으로 연다.
+-- 1. 보상률 범위를 넓힌다. (0,5) 고정이던 것을 0~20 으로 연다.
 --    예측 제출 시점에 그 회차의 약속 보상률을 저장하고, 판정 때 그 값을 쓴다.
 --    빗나가면 0 이라 하한은 그대로 0 이다.
 --
@@ -17,7 +17,7 @@
 
 alter table prediction_entries drop constraint if exists prediction_entries_reward_rate_pct_check;
 alter table prediction_entries add constraint prediction_entries_reward_rate_pct_check
-  check (reward_rate_pct between 0 and 10);
+  check (reward_rate_pct between 0 and 20);
 
 alter table reward_claims add column if not exists round_id text references prediction_rounds(id);
 

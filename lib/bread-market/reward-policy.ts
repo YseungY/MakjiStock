@@ -34,20 +34,22 @@ export function sessionOfHour(hour: number): Session {
   return "list";
 }
 
-/* 예측 보상률은 회차마다 달라진다 (3~10%). 즉시 수령은 5% 고정이다.
-   "지금 5% 확정" 과 "내일 맞히면 ?%" 중에 고르게 해서, 예측 때문에 구매를
-   미루는 것을 줄이고 기업이 밀고 싶은 빵으로 구매를 모으려는 설계다. */
+/* 예측에 리스크/리워드를 붙인다. 둘 다 랜덤이지만 보이는 방식이 다르다.
 
-/** 바로 받기 — 예측을 포기하고 그 자리에서 받는 확정 보상률. */
-export const INSTANT_REWARD_PCT = 10;
+     안정형 투자 — 10~15% 중 하나. 회차마다 정해지고 고르기 전에 숫자를 보여준다.
+     공격형 투자 —  5~20% 중 하나. 걸 때는 "?" 이고 결과가 나와야 알 수 있다.
 
-/** 예측 보상률 범위. 이 안에서 회차마다 뽑는다. */
-export const PREDICTION_REWARD_MIN_PCT = 3;
-export const PREDICTION_REWARD_MAX_PCT = 10;
+   안정형은 얼마를 받는지 알고 고르는 대신 폭이 좁고, 공격형은 폭이 넓은 대신
+   금액도 성공 여부도 모른 채 건다. */
+
+export const INSTANT_REWARD_MIN_PCT = 10;
+export const INSTANT_REWARD_MAX_PCT = 15;
+export const PREDICTION_REWARD_MIN_PCT = 5;
+export const PREDICTION_REWARD_MAX_PCT = 20;
 
 /* 회차 id 로 결정론적으로 뽑는다. 요청마다 새로 뽑으면 화면에 보인 값과 저장되는
-   값이 달라지고, 10 이 나올 때까지 새로고침할 수 있다. 서버와 화면이 같은 함수를
-   써서 같은 값을 말한다 — 서버는 제출 시점에 다시 계산해 저장하므로 위조도 막힌다. */
+   값이 달라지고, 최댓값이 나올 때까지 새로고침할 수 있다. 서버와 화면이 같은
+   함수를 써서 같은 값을 말하고, 서버는 발급 시점에 다시 계산해 쓴다. */
 function seedOf(text: string) {
   let h = 2166136261;
   for (let i = 0; i < text.length; i += 1) {
@@ -58,18 +60,30 @@ function seedOf(text: string) {
 }
 
 /**
- * 그 회차의 예측 보상률(%). 같은 회차면 누가 언제 물어도 같은 값이다.
+ * 안정형(바로 받기) 보상률(%). 같은 회차면 누가 언제 물어도 같은 값이다 —
+ * 고르기 전에 보여주는 숫자이므로 흔들리면 안 된다.
  * @param roundId `prediction_rounds.id` — `${시장날짜}-${판정세션}`
  */
-export function predictionRewardPct(roundId: string) {
+export function instantRewardPct(roundId: string) {
+  const span = INSTANT_REWARD_MAX_PCT - INSTANT_REWARD_MIN_PCT + 1;
+  return INSTANT_REWARD_MIN_PCT + (seedOf(`instant@${roundId}`) % span);
+}
+
+/**
+ * 공격형(내일 맞히기) 보상률(%)을 뽑는다. 사람마다 다르게 걸리고, 건 사람은
+ * 결과가 나올 때까지 모른다 — 그래서 회차로 고정하지 않고 제출할 때마다 뽑는다.
+ * 화면에 보이지 않으니 다시 뽑게 만들 방법도 없다.
+ *
+ * 서버에서만 부른다. 뽑은 값은 prediction_entries.reward_rate_pct 에 박아
+ * 나중에 규칙이 바뀌어도 이미 건 사람의 조건이 그대로이게 한다.
+ */
+export function rollPredictionRewardPct() {
   const span = PREDICTION_REWARD_MAX_PCT - PREDICTION_REWARD_MIN_PCT + 1;
-  return PREDICTION_REWARD_MIN_PCT + (seedOf(`reward@${roundId}`) % span);
+  return PREDICTION_REWARD_MIN_PCT + Math.floor(Math.random() * span);
 }
 
 /**
  * 판정 결과에 실제로 줄 보상률. 약속한 값은 적중·무승부에만 주고 빗나가면 0 이다.
- * 약속값은 제출 시점에 prediction_entries.reward_rate_pct 에 저장된다 — 나중에
- * 회차 규칙이 바뀌어도 이미 건 사람의 조건은 그대로다.
  */
 export function rewardPctFor(outcome: Outcome, promisedPct: number) {
   return outcome === "miss" ? 0 : promisedPct;
@@ -182,6 +196,6 @@ export function lockCodeAmountWon(lockedPriceWon: number, currentPriceWon: numbe
 }
 
 export const CONSUMER_REWARD_NOTICE =
-  `바로 받으면 ${INSTANT_REWARD_PCT}% 할인코드를 드려요. 내일 예측은 틀리지만 않으면 ` +
-  `${PREDICTION_REWARD_MIN_PCT}~${PREDICTION_REWARD_MAX_PCT}% 이고 회차마다 달라져요. ` +
-  "상품 할인과 합쳐 최종 혜택은 최대 38%입니다.";
+  `안정형은 ${INSTANT_REWARD_MIN_PCT}~${INSTANT_REWARD_MAX_PCT}% 중 오늘 값을 바로 드리고, ` +
+  `공격형은 ${PREDICTION_REWARD_MIN_PCT}~${PREDICTION_REWARD_MAX_PCT}% 중 하나가 걸려 ` +
+  "틀리지만 않으면 드려요. 상품 할인과 합쳐 최종 혜택은 최대 38%입니다.";

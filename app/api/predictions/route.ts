@@ -1,4 +1,4 @@
-import { predictionRewardPct } from "@/lib/bread-market/reward-policy";
+import { rollPredictionRewardPct } from "@/lib/bread-market/reward-policy";
 import { currentPriceOf } from "@/lib/pricing/current-price";
 import { kstNow } from "@/lib/market/calendar";
 import { predictionSchedule } from "@/lib/predictions/schedule";
@@ -119,9 +119,10 @@ export async function POST(request: Request) {
     );
   }
 
-  /* 약속 보상률은 제출 시점에 못 박는다. 회차에서 결정론적으로 뽑은 값이라
-     화면에 보여준 값과 같고, 나중에 규칙이 바뀌어도 이미 건 사람의 조건은 그대로다. */
-  const promisedPct = predictionRewardPct(roundId);
+  /* 공격형 보상률은 제출할 때 뽑아서 못 박는다. 걸기 전에는 보여주지 않으므로
+     사람마다 달라도 되고, 다시 뽑게 만들 방법도 없다. 나중에 규칙이 바뀌어도
+     이미 건 사람의 조건은 그대로다. */
+  const promisedPct = rollPredictionRewardPct();
 
   const { data: entry, error } = await db
     .from("prediction_entries")

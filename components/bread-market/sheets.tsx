@@ -24,11 +24,12 @@ import {
 import { lockPhaseOf } from "@/lib/bread-market/flow";
 import { predictionSchedule } from "@/lib/predictions/schedule";
 import {
-  INSTANT_REWARD_PCT,
+  INSTANT_REWARD_MAX_PCT,
+  INSTANT_REWARD_MIN_PCT,
   PREDICTION_REWARD_MAX_PCT,
   PREDICTION_REWARD_MIN_PCT,
   SESSION_LABEL,
-  predictionRewardPct,
+  instantRewardPct,
   lockAppliedPriceWon,
   lockOpensOn,
   lockProtection,
@@ -575,7 +576,9 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
   /* 회차 보상률. 서버와 같은 함수라 화면에 보인 값이 그대로 저장된다 —
      요청마다 새로 뽑으면 10 이 나올 때까지 새로고침할 수 있다. */
   const roundId = `${todayKey}-am`;
-  const winPct = predictionRewardPct(roundId);
+  /* 안정형만 숫자를 보여준다. 공격형은 걸 때 "?" 이고 결과가 나와야 안다 —
+     그래서 화면이 뽑지 않고 서버가 제출할 때 뽑는다. */
+  const safePct = instantRewardPct(roundId);
 
 
   /* 예측도 서버가 확정한다. 한 회차 1회 제한과 기준가를 브라우저가 정하면
@@ -624,7 +627,7 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
       /* instantRewards 는 서버 prop 이라 라우터 갱신으로 내려온다. */
       router.refresh();
       refreshPredictions();
-      toast("🎟️", `${INSTANT_REWARD_PCT}% 할인코드를 받았어요`, `${b.name} · ${won(payload.amountWon)}원 · MY 에서 확인하세요`);
+      toast("🎟️", `${payload.ratePct}% 할인코드를 받았어요`, `${b.name} · ${won(payload.amountWon)}원 · MY 에서 확인하세요`);
       onClose();
     } catch {
       toast("⚠️", "받지 못했어요", "네트워크 상태를 확인해주세요");
@@ -652,26 +655,34 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
             </p>
             <div className="riskpick">
               <button className="riskpick__b" onClick={takeNow} disabled={taking}>
-                <em>바로 받기</em>
-                <b className="n">{INSTANT_REWARD_PCT}%</b>
-                <span>{taking ? "받는 중…" : "지금 확정 할인코드"}</span>
+                <em>안정형 투자</em>
+                <b className="n">{safePct}%</b>
+                <span>{taking ? "받는 중…" : "지금 바로 받기"}</span>
               </button>
               <button className="riskpick__b riskpick__b--bet" onClick={() => setMode("predict")} disabled={taking}>
-                <em>내일 맞히기</em>
-                <b className="n">{winPct}%</b>
-                <span>틀리지만 않으면</span>
+                <em>공격형 투자</em>
+                <b className="n">?</b>
+                <span>내일 맞히기</span>
               </button>
             </div>
-            <p className="note" style={{ textAlign: "center" }}>
-              내일 보상률은 회차마다 {PREDICTION_REWARD_MIN_PCT}~{PREDICTION_REWARD_MAX_PCT}% 사이에서 달라져요.
-              오늘은 {winPct}%예요. 가격이 같아도 무승부로 받아요.
-            </p>
+            <ul className="riskpick__x">
+              <li>
+                <b>안정형</b> 매일 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 중 하나예요.
+                오늘은 <strong className="n">{safePct}%</strong>이고, 누르면 그 자리에서 받아요.
+              </li>
+              <li>
+                <b>공격형</b> {PREDICTION_REWARD_MIN_PCT}~{PREDICTION_REWARD_MAX_PCT}% 중 하나가 걸려요.
+                몇 %인지는 <strong>내일 결과가 나와야</strong> 알 수 있어요. 틀리지만 않으면 받고,
+                가격이 같아도 무승부로 받아요.
+              </li>
+              <li>둘 중 하나만 · 하루 한 번 · 이 빵에만 쓸 수 있어요.</li>
+            </ul>
           </>
         ) : (
         <>
         <p className="lead" style={{ textAlign: "center", fontSize: 16 }}>
           {targetLabel}, 오를까요 내릴까요?
-          <small>틀리지만 않으면 {winPct}% 쿠폰 · 참여는 하루 한 번</small>
+          <small>공격형 · 맞히면 {PREDICTION_REWARD_MIN_PCT}~{PREDICTION_REWARD_MAX_PCT}% 중 하나 · 하루 한 번</small>
         </p>
         <div className="vote">
           {(["up", "down"] as const).map((v) => (
@@ -688,7 +699,7 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
           ))}
         </div>
         <p className="note" style={{ textAlign: "center" }}>
-          쿠폰은 정가의 {winPct}%예요. 가격이 같아도 무승부로 받아요. 막지 자사몰 가입 후 쿠폰번호를 등록해야 주문에 적용돼요.
+          몇 %인지는 내일 결과와 함께 알려드려요. 가격이 같아도 무승부로 받아요. 막지 자사몰 가입 후 쿠폰번호를 등록해야 주문에 적용돼요.
         </p>
         <button className="btn btn--ghost btn--sm" style={{ width: "100%" }} onClick={() => setMode(null)}>
           다시 고르기
@@ -714,8 +725,8 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
         </div>
       </div>
       <p className="note" style={{ textAlign: "center" }}>
-        결과는 06:00에 MY 에서 확인할 수 있어요. 틀리지만 않으면 {submitted.reward_rate_pct || winPct}% 할인코드를 드려요.
-        가격이 같아도 무승부로 드려요.
+        결과는 06:00에 MY 에서 확인할 수 있어요. 틀리지만 않으면 할인코드를 드려요 —
+        몇 %인지는 그때 함께 알려드려요. 가격이 같아도 무승부로 드려요.
       </p>
     </Sheet>
   );

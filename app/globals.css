@@ -930,3 +930,9 @@ body{display:grid;place-items:center}
 .riskpick__b--bet{border-color:var(--blue-line);background:var(--blue-soft)}
 .riskpick__b--bet b{color:var(--blue-deep)}
 .riskpick__b--bet em{color:var(--blue)}
+.riskpick__b--bet b{font-variant-numeric:normal}
+/* 랜덤 범위 설명 — 무엇이 랜덤이고 언제 알 수 있는지 */
+.riskpick__x{display:grid;gap:7px;margin:14px 0 0;padding:13px 14px;list-style:none;
+  border-radius:12px;background:var(--paper-2);color:var(--ink-3);font-size:10.5px;line-height:1.6}
+.riskpick__x b{color:var(--ink-2);font-weight:800}
+.riskpick__x strong{color:var(--ink);font-weight:800}

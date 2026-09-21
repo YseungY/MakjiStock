@@ -4,7 +4,8 @@ import { breadOf, quoteAt, won } from "@/lib/bread-market/engine";
 import { lockPhaseOf } from "@/lib/bread-market/flow";
 import {
   CONSUMER_REWARD_NOTICE,
-  INSTANT_REWARD_PCT,
+  INSTANT_REWARD_MAX_PCT,
+  INSTANT_REWARD_MIN_PCT,
   SESSION_LABEL,
   lockProtection,
 } from "@/lib/bread-market/reward-policy";
@@ -152,7 +153,7 @@ export function MyPanel() {
             <div className="empty">
               <i aria-hidden="true">🧭</i>
               <b>아직 예측 기록이 없어요</b>
-              <span>바로 받으면 {INSTANT_REWARD_PCT}% 확정<br />내일 맞히면 회차마다 다른 보상</span>
+              <span>안정형은 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 확정<br />공격형은 맞히면 더 크게</span>
               <br />
               <button className="empty__cta" onClick={() => openSheet({ type: "predict" })}>내일 가격 예측하기</button>
             </div>

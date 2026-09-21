@@ -1,4 +1,4 @@
-import { INSTANT_REWARD_PCT, couponAmountWon, predictionCodeValidUntil } from "@/lib/bread-market/reward-policy";
+import { couponAmountWon, instantRewardPct, predictionCodeValidUntil } from "@/lib/bread-market/reward-policy";
 import { encryptSecret } from "@/lib/crypto";
 import { kstNow } from "@/lib/market/calendar";
 import { predictionSchedule } from "@/lib/predictions/schedule";
@@ -9,7 +9,7 @@ import { getOrCreateVisitorHash } from "@/lib/visitor";
 
 export const dynamic = "force-dynamic";
 
-/* 바로 받기 — 예측을 포기하고 5% 쿠폰을 그 자리에서 받는다.
+/* 안정형 투자(바로 받기) — 예측을 포기하고 회차 보상률(10~15%)을 그 자리에서 받는다.
 
    POST /api/predictions/instant  { ticker }
 
@@ -79,7 +79,9 @@ export async function POST(request: Request) {
     );
   }
 
-  const amountWon = couponAmountWon(INSTANT_REWARD_PCT, price.priceWon, product.base_price_won);
+  /* 화면이 보여준 그 값이다. 회차에서 결정론적으로 뽑으므로 서버가 다시 계산해도 같다. */
+  const ratePct = instantRewardPct(roundId);
+  const amountWon = couponAmountWon(ratePct, price.priceWon, product.base_price_won);
   if (amountWon <= 0) {
     return Response.json({ error: "지금은 할인 여력이 없어요. 잠시 뒤 다시 시도해주세요." }, { status: 409 });
   }
@@ -121,7 +123,7 @@ export async function POST(request: Request) {
   const { error: claimError } = await db.from("reward_claims").insert({
     round_id: roundId,
     visitor_hash: visitorHash,
-    rate_pct: INSTANT_REWARD_PCT,
+    rate_pct: ratePct,
     amount_won: amountWon,
     sale_price_won_at_issue: price.priceWon,
     cafe24_discount_code_no: codeNo,
@@ -140,7 +142,7 @@ export async function POST(request: Request) {
   }
 
   return Response.json(
-    { code, amountWon, ratePct: INSTANT_REWARD_PCT, validUntil, productName: product.name },
+    { code, amountWon, ratePct, validUntil, productName: product.name },
     { status: 201 },
   );
 }

@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   allowedCouponPct,
-  INSTANT_REWARD_PCT,
+  INSTANT_REWARD_MAX_PCT,
+  INSTANT_REWARD_MIN_PCT,
   PREDICTION_CODE_HOURS,
   PREDICTION_REWARD_MAX_PCT,
   PREDICTION_REWARD_MIN_PCT,
-  predictionRewardPct,
+  instantRewardPct,
+  rollPredictionRewardPct,
   rewardPctFor,
   predictionCodeValidUntil,
   lockOpensOn,
@@ -106,36 +108,48 @@ test("잠금은 평일에만 열린다", () => {
   assert.equal(lockOpensOn("2026-09-21"), true);  // 월
 });
 
-/* 예측 보상률은 회차마다 3~10% 에서 달라진다. 회차 id 로 결정론적으로 뽑아야
-   화면에 보인 값과 저장되는 값이 같고, 10 이 나올 때까지 새로고침할 수 없다. */
-test("같은 회차는 언제 물어도 같은 보상률", () => {
-  const a = predictionRewardPct("2026-09-21-am");
-  assert.equal(predictionRewardPct("2026-09-21-am"), a);
-  assert.equal(predictionRewardPct("2026-09-21-am"), a);
+/* 안정형은 고르기 전에 숫자를 보여주므로 흔들리면 안 된다 — 요청마다 새로 뽑으면
+   화면에 보인 값과 저장되는 값이 갈리고, 최댓값이 나올 때까지 새로고침할 수 있다. */
+test("안정형은 같은 회차면 언제 물어도 같은 값", () => {
+  const a = instantRewardPct("2026-09-21-am");
+  assert.equal(instantRewardPct("2026-09-21-am"), a);
+  assert.equal(instantRewardPct("2026-09-21-am"), a);
 });
 
-test("보상률은 3~10% 안이고 회차마다 갈린다", () => {
+test("안정형은 10~15% 안이고 회차마다 갈린다", () => {
   const seen = new Set();
   for (let d = 1; d <= 28; d += 1) {
-    const pct = predictionRewardPct(`2026-09-${String(d).padStart(2, "0")}-am`);
+    const pct = instantRewardPct(`2026-09-${String(d).padStart(2, "0")}-am`);
+    assert.ok(pct >= INSTANT_REWARD_MIN_PCT && pct <= INSTANT_REWARD_MAX_PCT, `${pct} 가 범위 밖`);
+    assert.equal(pct, Math.trunc(pct));
+    seen.add(pct);
+  }
+  assert.ok(seen.size >= 4, `28회차에 ${seen.size}종만 나왔다 — 한쪽으로 쏠린다`);
+});
+
+/* 공격형은 걸 때 보이지 않으므로 사람마다 달라도 되고, 다시 뽑게 만들 방법도 없다. */
+test("공격형은 5~20% 안에서 매번 새로 뽑는다", () => {
+  const seen = new Set();
+  for (let i = 0; i < 400; i += 1) {
+    const pct = rollPredictionRewardPct();
     assert.ok(pct >= PREDICTION_REWARD_MIN_PCT && pct <= PREDICTION_REWARD_MAX_PCT, `${pct} 가 범위 밖`);
     assert.equal(pct, Math.trunc(pct));
     seen.add(pct);
   }
-  assert.ok(seen.size >= 5, `28회차에 ${seen.size}종만 나왔다 — 한쪽으로 쏠린다`);
+  assert.equal(seen.size, PREDICTION_REWARD_MAX_PCT - PREDICTION_REWARD_MIN_PCT + 1, "범위를 다 쓰지 않는다");
 });
 
-/* 바로 받기가 예측보다 유리해야 "미루지 말고 지금" 이 성립한다.
-   예측 기대값 = 평균 보상률 × 적중 확률(실측 52.1%) ≈ 6.5 × 0.52 ≈ 3.4%. */
-test("바로 받기는 확정 10% — 예측 기대값보다 확실히 높다", () => {
-  assert.equal(INSTANT_REWARD_PCT, 10);
-  const 평균 = (PREDICTION_REWARD_MIN_PCT + PREDICTION_REWARD_MAX_PCT) / 2;
-  assert.ok(INSTANT_REWARD_PCT > 평균 * 0.521, "바로 받기가 예측 기대값보다 낮으면 미루는 쪽이 이득이다");
+/* 안정형이 공격형 기대값보다 높아야 "미루지 말고 지금" 이 성립한다.
+   공격형 기대값 = 평균 보상률 × 적중 확률(실측 52.1%). */
+test("안정형이 공격형 기대값보다 높다", () => {
+  const 안정 = (INSTANT_REWARD_MIN_PCT + INSTANT_REWARD_MAX_PCT) / 2;
+  const 공격 = ((PREDICTION_REWARD_MIN_PCT + PREDICTION_REWARD_MAX_PCT) / 2) * 0.521;
+  assert.ok(안정 > 공격, `안정 ${안정}% vs 공격 ${공격.toFixed(1)}% — 미루는 쪽이 이득이면 기획이 뒤집힌다`);
 });
 
 /* 약속한 보상률은 적중·무승부에만 준다. 빗나가면 0 이다. */
 test("판정은 제출 때 약속한 값을 쓴다", () => {
-  assert.equal(rewardPctFor("hit", 9), 9);
-  assert.equal(rewardPctFor("void", 9), 9);
-  assert.equal(rewardPctFor("miss", 9), 0);
+  assert.equal(rewardPctFor("hit", 17), 17);
+  assert.equal(rewardPctFor("void", 17), 17);
+  assert.equal(rewardPctFor("miss", 17), 0);
 });
