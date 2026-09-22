@@ -80,7 +80,7 @@ export async function POST(request: Request) {
   }
 
   /* 화면이 보여준 그 값이다. 회차에서 결정론적으로 뽑으므로 서버가 다시 계산해도 같다. */
-  const ratePct = instantRewardPct(roundId);
+  const ratePct = instantRewardPct(roundId, target.submitSession);
   const amountWon = couponAmountWon(ratePct, price.priceWon, product.base_price_won);
   if (amountWon <= 0) {
     return Response.json({ error: "지금은 할인 여력이 없어요. 잠시 뒤 다시 시도해주세요." }, { status: 409 });

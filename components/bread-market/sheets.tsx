@@ -572,13 +572,14 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
   const b = predictBreadOf(todayKey);
   const q = quoteAt(b, todayKey, session);
   const ref = q.price;
-  const targetLabel = predictionSchedule(todayKey, session === "am" ? 10 : 18).label;
-  /* 회차 보상률. 서버와 같은 함수라 화면에 보인 값이 그대로 저장된다 —
-     요청마다 새로 뽑으면 10 이 나올 때까지 새로고침할 수 있다. */
+  const round = predictionSchedule(todayKey, session === "am" ? 10 : 18);
+  const targetLabel = round.label;
+  /* 회차 보상률. 서버와 같은 함수·같은 장으로 뽑아 화면에 보인 값이 그대로
+     저장된다 — 요청마다 새로 뽑으면 큰 값이 나올 때까지 새로고침할 수 있다. */
   const roundId = `${todayKey}-am`;
   /* 안정형만 숫자를 보여준다. 공격형은 걸 때 "?" 이고 결과가 나와야 안다 —
      그래서 화면이 뽑지 않고 서버가 제출할 때 뽑는다. */
-  const safePct = instantRewardPct(roundId);
+  const safePct = instantRewardPct(roundId, round.submitSession);
 
 
   /* 예측도 서버가 확정한다. 한 회차 1회 제한과 기준가를 브라우저가 정하면

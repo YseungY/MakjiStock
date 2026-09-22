@@ -228,7 +228,8 @@ export function MarketPanel() {
   /* 이 카드는 "지금 열려 있는 회차에 참여했나"만 말한다. 지난 회차 결과(적중·무효·
      아쉬움)를 여기 띄우면 날이 바뀌어 다시 참여할 수 있는데도 어제의 적중 배지가
      남는다. 결과는 MY 에 있다. */
-  const openRound = predictionSchedule(todayKey, session === "am" ? 10 : 18).targetDate;
+  const round = predictionSchedule(todayKey, session === "am" ? 10 : 18);
+  const openRound = round.targetDate;
   const joined = predictions.find(
     (p) => p.target_publish_date === openRound && p.target_session === "am",
   );
@@ -372,7 +373,7 @@ export function MarketPanel() {
         <button className="predcard" onClick={() => openSheet({ type: "predict" })}>
           <div className="predcard__k">TOMORROW&rsquo;S BREAD</div>
           <h3 className="predcard__t">내일 이 빵, 오를까 내릴까</h3>
-          <p className="predcard__d">안정형 {instantRewardPct(`${todayKey}-am`)}% 확정 · 공격형 ? · 결과는 06:00 공개</p>
+          <p className="predcard__d">안정형 {instantRewardPct(`${todayKey}-am`, round.submitSession)}% 확정 · 공격형 ? · 결과는 06:00 공개</p>
           <div className="predcard__b">
             <div>
               <b>{pb.name}{joined ? ` · ${joined.direction === "up" ? "오른다" : "내린다"}` : ""}</b>

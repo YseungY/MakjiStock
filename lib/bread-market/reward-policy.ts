@@ -60,8 +60,18 @@ export function isPublicAt(
    안정형은 얼마를 받는지 알고 고르는 대신 폭이 좁고, 공격형은 폭이 넓은 대신
    금액도 성공 여부도 모른 채 건다. */
 
-export const INSTANT_REWARD_MIN_PCT = 10;
-export const INSTANT_REWARD_MAX_PCT = 15;
+/* 안정형 보상률은 장마다 다르다 — 오전장이 후하다.
+   오후장은 이미 그날 두 번째 가격이라 잠금·차액 쿠폰과 겹치는 기회가 많다.
+   먼저 온 사람에게 더 주고, 오후에 오는 사람에게는 폭을 낮춘다. */
+export const INSTANT_REWARD_PCTS: Record<"am" | "pm", readonly number[]> = {
+  am: [15, 14, 13],
+  pm: [10, 11, 12],
+};
+
+/* 화면 문구가 말하는 전체 폭. 표에서 뽑아야 표를 고칠 때 문구가 따라온다. */
+const ALL_INSTANT_PCTS = [...INSTANT_REWARD_PCTS.am, ...INSTANT_REWARD_PCTS.pm];
+export const INSTANT_REWARD_MIN_PCT = Math.min(...ALL_INSTANT_PCTS);
+export const INSTANT_REWARD_MAX_PCT = Math.max(...ALL_INSTANT_PCTS);
 export const PREDICTION_REWARD_MIN_PCT = 5;
 export const PREDICTION_REWARD_MAX_PCT = 20;
 
@@ -78,13 +88,20 @@ function seedOf(text: string) {
 }
 
 /**
- * 안정형(바로 받기) 보상률(%). 같은 회차면 누가 언제 물어도 같은 값이다 —
- * 고르기 전에 보여주는 숫자이므로 흔들리면 안 된다.
+ * 안정형(바로 받기) 보상률(%). 같은 회차·같은 장이면 누가 언제 물어도 같은
+ * 값이다 — 고르기 전에 보여주는 숫자이므로 흔들리면 안 된다.
+ *
+ * 16:00 에는 바뀐다. 판정은 하루 한 회차뿐이라 roundId 만으로는 장이 갈리지
+ * 않아 제출하는 장을 따로 받는다. 그래서 "화면에 보인 값이 그대로 저장된다"는
+ * 장이 넘어가는 그 순간에만 깨진다 — 화면은 분마다 시계를 다시 읽고(store.ts
+ * subscribeMinute) 장이 바뀌면 다시 그리므로 어긋남은 1분 안에 닫힌다.
+ *
  * @param roundId `prediction_rounds.id` — `${시장날짜}-${판정세션}`
+ * @param session 제출하는 장. predictionSchedule 의 submitSession 을 쓴다.
  */
-export function instantRewardPct(roundId: string) {
-  const span = INSTANT_REWARD_MAX_PCT - INSTANT_REWARD_MIN_PCT + 1;
-  return INSTANT_REWARD_MIN_PCT + (seedOf(`instant@${roundId}`) % span);
+export function instantRewardPct(roundId: string, session: "am" | "pm") {
+  const table = INSTANT_REWARD_PCTS[session];
+  return table[seedOf(`instant@${roundId}@${session}`) % table.length];
 }
 
 /**

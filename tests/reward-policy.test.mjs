@@ -8,6 +8,7 @@ import {
   PREDICTION_REWARD_MAX_PCT,
   PREDICTION_REWARD_MIN_PCT,
   instantRewardPct,
+  INSTANT_REWARD_PCTS,
   rollPredictionRewardPct,
   rewardPctFor,
   predictionCodeValidUntil,
@@ -111,21 +112,38 @@ test("잠금은 평일에만 열린다", () => {
 
 /* 안정형은 고르기 전에 숫자를 보여주므로 흔들리면 안 된다 — 요청마다 새로 뽑으면
    화면에 보인 값과 저장되는 값이 갈리고, 최댓값이 나올 때까지 새로고침할 수 있다. */
-test("안정형은 같은 회차면 언제 물어도 같은 값", () => {
-  const a = instantRewardPct("2026-09-21-am");
-  assert.equal(instantRewardPct("2026-09-21-am"), a);
-  assert.equal(instantRewardPct("2026-09-21-am"), a);
+test("안정형은 같은 회차·같은 장이면 언제 물어도 같은 값", () => {
+  for (const session of ["am", "pm"]) {
+    const a = instantRewardPct("2026-09-21-am", session);
+    assert.equal(instantRewardPct("2026-09-21-am", session), a);
+    assert.equal(instantRewardPct("2026-09-21-am", session), a);
+  }
 });
 
-test("안정형은 10~15% 안이고 회차마다 갈린다", () => {
-  const seen = new Set();
-  for (let d = 1; d <= 28; d += 1) {
-    const pct = instantRewardPct(`2026-09-${String(d).padStart(2, "0")}-am`);
-    assert.ok(pct >= INSTANT_REWARD_MIN_PCT && pct <= INSTANT_REWARD_MAX_PCT, `${pct} 가 범위 밖`);
-    assert.equal(pct, Math.trunc(pct));
-    seen.add(pct);
+test("안정형은 그 장의 표 안에서만 나오고 세 값을 다 쓴다", () => {
+  for (const session of ["am", "pm"]) {
+    const table = INSTANT_REWARD_PCTS[session];
+    const seen = new Set();
+    for (let d = 1; d <= 28; d += 1) {
+      const pct = instantRewardPct(`2026-09-${String(d).padStart(2, "0")}-am`, session);
+      assert.ok(table.includes(pct), `${session} 장에 ${pct}% — 표(${table}) 밖이다`);
+      seen.add(pct);
+    }
+    assert.equal(seen.size, table.length, `${session} 장: 28회차에 ${seen.size}종만 나왔다 — 한쪽으로 쏠린다`);
   }
-  assert.ok(seen.size >= 4, `28회차에 ${seen.size}종만 나왔다 — 한쪽으로 쏠린다`);
+});
+
+/* 오전에 오는 쪽이 더 받아야 "오후까지 미룰 이유가 없다" 가 성립한다. */
+test("안정형은 오전장이 오후장보다 후하다", () => {
+  const 오전최소 = Math.min(...INSTANT_REWARD_PCTS.am);
+  const 오후최대 = Math.max(...INSTANT_REWARD_PCTS.pm);
+  assert.ok(오전최소 > 오후최대, `오전 최소 ${오전최소}% 가 오후 최대 ${오후최대}% 이하다`);
+});
+
+/* 화면 문구가 쓰는 전체 폭은 표에서 나온다. 표만 고치면 문구가 따라와야 한다. */
+test("전체 폭은 두 장의 표를 합친 값이다", () => {
+  assert.equal(INSTANT_REWARD_MIN_PCT, Math.min(...INSTANT_REWARD_PCTS.am, ...INSTANT_REWARD_PCTS.pm));
+  assert.equal(INSTANT_REWARD_MAX_PCT, Math.max(...INSTANT_REWARD_PCTS.am, ...INSTANT_REWARD_PCTS.pm));
 });
 
 /* 공격형은 걸 때 보이지 않으므로 사람마다 달라도 되고, 다시 뽑게 만들 방법도 없다. */
@@ -142,10 +160,13 @@ test("공격형은 5~20% 안에서 매번 새로 뽑는다", () => {
 
 /* 안정형이 공격형 기대값보다 높아야 "미루지 말고 지금" 이 성립한다.
    공격형 기대값 = 평균 보상률 × 적중 확률(실측 52.1%). */
-test("안정형이 공격형 기대값보다 높다", () => {
-  const 안정 = (INSTANT_REWARD_MIN_PCT + INSTANT_REWARD_MAX_PCT) / 2;
+test("안정형이 공격형 기대값보다 높다 — 두 장 모두", () => {
   const 공격 = ((PREDICTION_REWARD_MIN_PCT + PREDICTION_REWARD_MAX_PCT) / 2) * 0.521;
-  assert.ok(안정 > 공격, `안정 ${안정}% vs 공격 ${공격.toFixed(1)}% — 미루는 쪽이 이득이면 기획이 뒤집힌다`);
+  for (const session of ["am", "pm"]) {
+    const table = INSTANT_REWARD_PCTS[session];
+    const 안정 = table.reduce((sum, v) => sum + v, 0) / table.length;
+    assert.ok(안정 > 공격, `${session} 안정 ${안정}% vs 공격 ${공격.toFixed(1)}% — 미루는 쪽이 이득이면 기획이 뒤집힌다`);
+  }
 });
 
 /* 약속한 보상률은 적중·무승부에만 준다. 빗나가면 0 이다. */
