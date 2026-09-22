@@ -96,16 +96,31 @@ function InstantRow({ reward }: { reward: InstantReward }) {
   /* 만료된 쿠폰은 받았다는 표시로만 내려온다 — 줄로는 그리지 않는다.
      열어둔 탭에서 카운트다운이 0 에 닿는 순간도 같다. */
   if (!reward.code || (left !== null && left <= 0)) return null;
+  /* 쿠폰은 Cafe24 에서 이 빵 하나에만 묶여 나간다. 이름을 빼면 아무 빵에나
+     쓸 수 있는 것처럼 보인다. 007 마이그레이션 전 쿠폰은 상품이 없다. */
+  const bread = reward.product?.ticker ? breadOf(reward.product.ticker) : null;
   return (
     <div className="myrow myrow--stack">
       <div className="myrow__top">
+        {bread ? <div className="myrow__i myrow__i--ph"><Photo bread={bread} /></div> : null}
         <div className="myrow__t">
-          <b>바로 받기 · {reward.ratePct}% 할인코드</b>
-          <span>발급 후 <strong>{INSTANT_CODE_HOURS}시간</strong> 안에 쓰셔야 해요</span>
+          <b>{reward.product?.name ?? "바로 받기"} · {reward.ratePct}% 할인코드</b>
+          <span>
+            {bread ? <><strong>이 빵에만</strong> 쓸 수 있어요 · </> : null}
+            발급 후 <strong>{INSTANT_CODE_HOURS}시간</strong> 안에
+          </span>
         </div>
         <div className="myrow__v"><Countdown validUntil={reward.validUntil} /></div>
       </div>
-      <CouponCode code={reward.code!} note={reward.amountWon ? `${won(reward.amountWon)}원` : undefined} />
+      <CouponCode code={reward.code} note={reward.amountWon ? `${won(reward.amountWon)}원` : undefined} />
+      {bread ? (
+        <button
+          className="btn btn--blue btn--sm"
+          onClick={() => window.open(`/api/out/cafe24/${bread.tk}`, "_blank", "noopener")}
+        >
+          {bread.name} 사러 가기
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -149,6 +164,9 @@ export function MyPanel() {
      마켓의 LockCard 와 같은 판정이다. 둘이 어긋나면 화면끼리 다른 말을 한다. */
   const lockNowPrice = lockBread ? quoteAt(lockBread, todayKey, session).price : 0;
   const risen = Boolean(lock && lockNowPrice > lock.lockedPrice);
+  /* 오후가 크론이 아직 안 돌았거나 보류된 날은 quoteAt 이 오전가로 떨어져
+     현재가와 잠금가가 정확히 같아진다. 그때 "더 싸요" 는 없는 이득을 말하는 것이다. */
+  const cheaper = Boolean(lock && lockNowPrice < lock.lockedPrice);
   const lockState =
     phase === "holding"
       ? { label: "보관 중", tone: "flat" }
@@ -157,7 +175,9 @@ export function MyPanel() {
         : phase !== "protecting"
           ? { label: "종료", tone: "flat" }
           : !risen
-            ? { label: "지금 더 싸요", tone: "down" }
+            ? cheaper
+              ? { label: "지금 더 싸요", tone: "down" }
+              : { label: "잠금가와 같아요", tone: "flat" }
             : server.discountCode
               ? { label: "사용 가능", tone: "down" }
               : { label: "쿠폰 준비 중", tone: "flat" };
@@ -169,7 +189,9 @@ export function MyPanel() {
         ? null // 쿠폰 줄 아래에 따로 쓴다
         : risen
           ? "오후가가 올랐어요. 차액 쿠폰을 만들고 있어요 — 잠시 후 다시 확인해주세요."
-          : "오후가가 잠금가보다 싸요. 쿠폰 없이 지금 가격으로 사시면 돼요 — 02:00에 정가로 돌아가기 전에요.";
+          : cheaper
+            ? "오후가가 잠금가보다 싸요. 쿠폰 없이 지금 가격으로 사시면 돼요 — 02:00에 정가로 돌아가기 전에요."
+            : "오후가가 잠금가와 같아요. 쿠폰 없이 그대로 사시면 돼요 — 02:00에 정가로 돌아가기 전에요.";
   const activity = live.length + (lock ? 1 : 0) + liveInstant.length;
   const lead = activity === 0 ? "시작해볼까요" : codes > 0 ? "할인코드 도착" : "기록 중";
 
@@ -214,7 +236,19 @@ export function MyPanel() {
                   </p>
                 </>
               ) : lockWhy ? (
-                <p className="myrow__why">{lockWhy}</p>
+                <>
+                  <p className="myrow__why">{lockWhy}</p>
+                  {/* 쿠폰이 없는 건 지금 가격이 이미 잠금가 이하라서다. 할 일은
+                      하나뿐이니 그 빵 몰로 바로 보낸다. */}
+                  {phase === "protecting" && !risen ? (
+                    <button
+                      className="btn btn--blue btn--sm"
+                      onClick={() => window.open(`/api/out/cafe24/${lock.tk}`, "_blank", "noopener")}
+                    >
+                      지금 {won(lockNowPrice)}원으로 사러 가기
+                    </button>
+                  ) : null}
+                </>
               ) : null}
             </div>
           ) : (

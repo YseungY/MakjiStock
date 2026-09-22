@@ -122,6 +122,9 @@ export async function POST(request: Request) {
 
   const { error: claimError } = await db.from("reward_claims").insert({
     round_id: roundId,
+    /* 쿠폰은 Cafe24 에서 이 빵 하나에만 묶여 나간다(discount-code.ts
+       available_product). 어느 빵인지 여기 남기지 않으면 화면이 말할 수 없다. */
+    product_id: product.id,
     visitor_hash: visitorHash,
     rate_pct: ratePct,
     amount_won: amountWon,

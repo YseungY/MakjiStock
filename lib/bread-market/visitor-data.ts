@@ -185,6 +185,8 @@ export async function loadPredictions(): Promise<ServerPredictionRow[]> {
 /** 만료됐거나 복호화에 실패하면 code 가 비고, 받았다는 사실만 남는다. */
 export type InstantReward = {
   roundId: string;
+  /** 쿠폰이 묶인 빵. 007 마이그레이션 전에 발급된 것은 null 이다. */
+  product: { ticker: string; name: string } | null;
   /** 만료·복호화 실패면 null. 받았다는 사실만 남는다. */
   code: string | null;
   amountWon: number | null;
@@ -204,7 +206,7 @@ export async function loadInstantRewards(): Promise<InstantReward[]> {
 
   const { data, error } = await supabaseAdmin()
     .from("reward_claims")
-    .select("round_id,rate_pct,amount_won,discount_code_ciphertext,valid_from,valid_until")
+    .select("round_id,rate_pct,amount_won,discount_code_ciphertext,valid_from,valid_until,products(ticker,name)")
     .eq("visitor_hash", visitorHash)
     .not("round_id", "is", null)
     .order("sent_at", { ascending: false })
@@ -229,6 +231,7 @@ export async function loadInstantRewards(): Promise<InstantReward[]> {
     }
     out.push({
       roundId: claim.round_id as string,
+      product: oneProduct(claim.products),
       code,
       amountWon: claim.amount_won,
       ratePct: claim.rate_pct,
