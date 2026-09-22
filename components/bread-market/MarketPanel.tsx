@@ -199,7 +199,7 @@ function LockCard({ todayKey }: { todayKey: string }) {
 }
 
 export function MarketPanel() {
-  const { todayKey, openSheet, predictions } = useBreadMarket();
+  const { todayKey, openSheet, predictions, instantRewards } = useBreadMarket();
   const now = useSession();
   const { session } = now;
   const my = useBreadState();
@@ -238,7 +238,11 @@ export function MarketPanel() {
   const joined = predictions.find(
     (p) => p.target_publish_date === openRound && p.target_session === "am",
   );
-  const predState = joined ? "참여 완료" : "참여 →";
+  /* 회차당 참여는 한 번뿐이고 안정형·공격형이 그 한 번을 나눠 쓴다. 안정형으로
+     썼으면 예측은 닫힌다 — 서버도 409 로 막는다(predictions/route.ts).
+     만료된 쿠폰도 내려오므로 3시간이 지나도 이 판정은 그대로다. */
+  const tookInstant = instantRewards.some((r) => r.roundId === `${todayKey}-am`);
+  const predState = tookInstant ? "받기 완료" : joined ? "참여 완료" : "참여 →";
 
   // 참여했으면 내가 고른 빵을, 아니면 오늘의 추천 빵을 보여준다.
   const joinedBread = joined ? BREADS.find((b) => b.tk === joined.products?.ticker) : undefined;
@@ -388,8 +392,12 @@ export function MarketPanel() {
       <div className="sect">
         <button className="predcard" onClick={() => openSheet({ type: "predict" })}>
           <div className="predcard__k">TOMORROW&rsquo;S BREAD</div>
-          <h3 className="predcard__t">내일 이 빵, 오를까 내릴까</h3>
-          <p className="predcard__d">안정형 {instantRewardPct(`${todayKey}-am`, round.submitSession)}% 확정 · 공격형 ? · 결과는 06:00 공개</p>
+          <h3 className="predcard__t">{tookInstant ? "오늘 몫은 받으셨어요" : "내일 이 빵, 오를까 내릴까"}</h3>
+          <p className="predcard__d">
+            {tookInstant
+              ? "안정형으로 받으셨어요 · 예측은 다음 장에 · MY 에서 남은 시간 확인"
+              : `안정형 ${instantRewardPct(`${todayKey}-am`, round.submitSession)}% 확정 · 공격형 ? · 결과는 06:00 공개`}
+          </p>
           <div className="predcard__b">
             <div>
               <b>{pb.name}{joined ? ` · ${joined.direction === "up" ? "오른다" : "내린다"}` : ""}</b>

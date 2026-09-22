@@ -24,6 +24,7 @@ import {
 import { lockPhaseOf } from "@/lib/bread-market/flow";
 import { predictionSchedule } from "@/lib/predictions/schedule";
 import {
+  INSTANT_CODE_HOURS,
   INSTANT_REWARD_MAX_PCT,
   INSTANT_REWARD_MIN_PCT,
   PREDICTION_REWARD_MAX_PCT,
@@ -559,7 +560,7 @@ export function LockSheet({ tk, onClose }: { tk: string; onClose: () => void }) 
    가격 예측 — 일반: 오늘 확정가 대비
    ══════════════════════════════════════════ */
 export function PredictSheet({ onClose }: { onClose: () => void }) {
-  const { todayKey, toast, predictions, refreshPredictions } = useBreadMarket();
+  const { todayKey, toast, predictions, refreshPredictions, instantRewards } = useBreadMarket();
   const { session } = useSession();
   const [voting, setVoting] = useState<Direction | null>(null);
   const [taking, setTaking] = useState(false);
@@ -569,6 +570,9 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
   /* 이번 회차 참여 여부는 서버가 안다. localStorage 만 보면 기록을 지운
      사람에게 참여 화면을 보여주고, 누르면 409 가 난다. */
   const submitted = predictions.find((p) => p.result === "pending") ?? null;
+  /* 회차의 한 번을 안정형으로 썼으면 예측은 닫힌다. 서버도 409 로 막으므로
+     (predictions/route.ts) 고르는 화면을 열어두면 눌렀을 때 실패만 한다. */
+  const taken = instantRewards.find((r) => r.roundId === `${todayKey}-am`) ?? null;
   const b = predictBreadOf(todayKey);
   const q = quoteAt(b, todayKey, session);
   const ref = q.price;
@@ -628,7 +632,11 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
       /* instantRewards 는 서버 prop 이라 라우터 갱신으로 내려온다. */
       router.refresh();
       refreshPredictions();
-      toast("🎟️", `${payload.ratePct}% 할인코드를 받았어요`, `${b.name} · ${won(payload.amountWon)}원 · MY 에서 확인하세요`);
+      toast(
+        "⏳",
+        `${payload.ratePct}% 할인코드 · ${payload.validHours ?? INSTANT_CODE_HOURS}시간 안에 쓰세요`,
+        `${b.name} · ${won(payload.amountWon)}원 · MY 에서 남은 시간을 볼 수 있어요`,
+      );
       onClose();
     } catch {
       toast("⚠️", "받지 못했어요", "네트워크 상태를 확인해주세요");
@@ -637,7 +645,31 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
     }
   }
 
-  /* 1) 참여 전 (서버 확인 중이면 참여 화면을 먼저 보여준다) */
+  /* 1) 안정형으로 받았다 — 이 회차는 끝났다 */
+  if (taken) {
+    return (
+      <Sheet title="내일 가격 예측" onClose={onClose} hero={b}>
+        <div style={{ textAlign: "center", marginBottom: 14 }}>
+          <div className="eyebrow">받기 완료</div>
+          <div style={{ fontSize: 19, fontWeight: 800, letterSpacing: "-.045em" }}>
+            안정형 {taken.ratePct}% 할인코드
+          </div>
+          <div className="n" style={{ fontSize: 12.5, color: "var(--ink-3)", fontWeight: 700, marginTop: 4 }}>
+            {taken.amountWon ? `${won(taken.amountWon)}원 · ` : ""}
+            {taken.code ? `받은 뒤 ${INSTANT_CODE_HOURS}시간 안에 사용` : "사용 기간이 지났어요"}
+          </div>
+        </div>
+        <p className="note" style={{ textAlign: "center" }}>
+          {taken.code
+            ? `쿠폰번호와 남은 시간은 MY 에서 볼 수 있어요. ${INSTANT_CODE_HOURS}시간이 지나면 사라져요.`
+            : "이번 회차 몫은 안정형으로 받으셨어요."}
+          {" "}예측은 다음 장에 다시 열려요 — 회차당 한 번, 둘 중 하나만이에요.
+        </p>
+      </Sheet>
+    );
+  }
+
+  /* 2) 참여 전 (서버 확인 중이면 참여 화면을 먼저 보여준다) */
   if (!submitted || voting) {
     return (
       <Sheet title="내일 가격 예측" onClose={onClose} hero={b}>
@@ -658,7 +690,7 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
               <button className="riskpick__b" onClick={takeNow} disabled={taking}>
                 <em>안정형 투자</em>
                 <b className="n">{safePct}%</b>
-                <span>{taking ? "받는 중…" : "지금 바로 받기"}</span>
+                <span>{taking ? "받는 중…" : `지금 받고 ${INSTANT_CODE_HOURS}시간 안에`}</span>
               </button>
               <button className="riskpick__b riskpick__b--bet" onClick={() => setMode("predict")} disabled={taking}>
                 <em>공격형 투자</em>
@@ -670,6 +702,7 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
               <li>
                 <b>안정형</b> 매일 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 중 하나예요.
                 오늘은 <strong className="n">{safePct}%</strong>이고, 누르면 그 자리에서 받아요.
+                <strong>받은 뒤 {INSTANT_CODE_HOURS}시간 안에 구매를 마쳐야</strong> 쓸 수 있어요 — 그 뒤에는 사라져요.
               </li>
               <li>
                 <b>공격형</b> {PREDICTION_REWARD_MIN_PCT}~{PREDICTION_REWARD_MAX_PCT}% 중 하나가 걸려요.
@@ -711,7 +744,7 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
     );
   }
 
-  /* 2) 참여 후 — 판정은 가격 산정 크론이 한다. 결과와 할인코드는 MY 에서 본다. */
+  /* 3) 참여 후 — 판정은 가격 산정 크론이 한다. 결과와 할인코드는 MY 에서 본다. */
   const chosen = submitted.direction === "up" ? "오른다" : "내린다";
   return (
     <Sheet title="내일 가격 예측" onClose={onClose} hero={b}>

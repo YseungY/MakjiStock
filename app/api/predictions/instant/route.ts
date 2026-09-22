@@ -1,4 +1,4 @@
-import { couponAmountWon, instantRewardPct, predictionCodeValidUntil } from "@/lib/bread-market/reward-policy";
+import { INSTANT_CODE_HOURS, couponAmountWon, instantCodeValidUntil, instantRewardPct } from "@/lib/bread-market/reward-policy";
 import { encryptSecret } from "@/lib/crypto";
 import { kstNow } from "@/lib/market/calendar";
 import { predictionSchedule } from "@/lib/predictions/schedule";
@@ -102,7 +102,7 @@ export async function POST(request: Request) {
   if (roundError) return Response.json({ error: roundError.message }, { status: 502 });
 
   const issuedAt = new Date().toISOString();
-  const validUntil = predictionCodeValidUntil(issuedAt);
+  const validUntil = instantCodeValidUntil(issuedAt);
   let code: string;
   let codeNo: string | null;
   try {
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
   }
 
   return Response.json(
-    { code, amountWon, ratePct, validUntil, productName: product.name },
+    { code, amountWon, ratePct, validUntil, validHours: INSTANT_CODE_HOURS, productName: product.name },
     { status: 201 },
   );
 }

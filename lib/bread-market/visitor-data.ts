@@ -182,9 +182,11 @@ export async function loadPredictions(): Promise<ServerPredictionRow[]> {
   }));
 }
 
+/** 만료됐거나 복호화에 실패하면 code 가 비고, 받았다는 사실만 남는다. */
 export type InstantReward = {
   roundId: string;
-  code: string;
+  /** 만료·복호화 실패면 null. 받았다는 사실만 남는다. */
+  code: string | null;
   amountWon: number | null;
   ratePct: number;
   validUntil: string | null;
@@ -212,21 +214,26 @@ export async function loadInstantRewards(): Promise<InstantReward[]> {
   const now = Date.now();
   const out: InstantReward[] = [];
   for (const claim of data ?? []) {
-    if (!claim.discount_code_ciphertext) continue;
+    /* 만료된 것도 내려보내되 code 만 비운다. 회차당 한 번뿐인 참여권을 안정형에
+       썼다는 사실은 3시간이 지나도 사라지지 않는다 — 화면이 그걸 모르면 예측을
+       다시 열어주고, 누르면 서버가 409 를 준다 (predictions/route.ts). */
     const started = claim.valid_from ? new Date(claim.valid_from).getTime() <= now : true;
     const expired = claim.valid_until ? new Date(claim.valid_until).getTime() <= now : false;
-    if (!started || expired) continue;
-    try {
-      out.push({
-        roundId: claim.round_id as string,
-        code: decryptSecret(claim.discount_code_ciphertext),
-        amountWon: claim.amount_won,
-        ratePct: claim.rate_pct,
-        validUntil: claim.valid_until,
-      });
-    } catch {
-      // 키가 바뀌었거나 값이 깨진 경우. 나머지는 그대로 보여준다.
+    let code: string | null = null;
+    if (started && !expired && claim.discount_code_ciphertext) {
+      try {
+        code = decryptSecret(claim.discount_code_ciphertext);
+      } catch {
+        // 키가 바뀌었거나 값이 깨진 경우. 받았다는 사실만 남긴다.
+      }
     }
+    out.push({
+      roundId: claim.round_id as string,
+      code,
+      amountWon: claim.amount_won,
+      ratePct: claim.rate_pct,
+      validUntil: claim.valid_until,
+    });
   }
   return out;
 }

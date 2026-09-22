@@ -175,8 +175,19 @@ export function rewardMessage(outcome: Outcome) {
   return { badge: "미적중", title: "아쉽게 빗나갔어요", ratePct: rate };
 }
 
-/** 예측 할인코드 유효 기간 — 발급 시점부터 24시간. */
+/** 공격형 할인코드 유효 기간 — 발급 시점부터 24시간.
+    내일 06:00 판정을 보고 와야 하므로 하루를 준다. */
 export const PREDICTION_CODE_HOURS = 24;
+
+/** 안정형(바로 받기) 할인코드 유효 기간 — 발급 시점부터 3시간.
+
+    공격형과 달리 기다릴 이유가 없는 쿠폰이다. 그 자리에서 받고 그 자리에서
+    쓰라는 것이라 짧게 끊는다. 짧은 만큼 화면이 남은 시간을 분·초까지 보여준다
+    (MyPanel Countdown).
+
+    장과 무관하게 발급 시각 기준이다. 오후장 15:50 에 받아도 3시간이 온전히
+    남는다 — 16:00 에 장이 넘어가도 이미 나간 쿠폰의 조건은 바뀌지 않는다. */
+export const INSTANT_CODE_HOURS = 3;
 
 /**
  * 예측 할인코드 유효 종료 — 발급 시각 + 24시간.
@@ -191,6 +202,11 @@ export const PREDICTION_CODE_HOURS = 24;
  */
 export function predictionCodeValidUntil(issuedAtIso: string) {
   return new Date(new Date(issuedAtIso).getTime() + PREDICTION_CODE_HOURS * 3_600_000).toISOString();
+}
+
+/** 안정형 할인코드 유효 종료 — 발급 시각 + 3시간. */
+export function instantCodeValidUntil(issuedAtIso: string) {
+  return new Date(new Date(issuedAtIso).getTime() + INSTANT_CODE_HOURS * 3_600_000).toISOString();
 }
 
 /* ───────── 가격 잠금 ───────── */

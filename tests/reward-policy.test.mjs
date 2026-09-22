@@ -4,6 +4,7 @@ import {
   allowedCouponPct,
   INSTANT_REWARD_MAX_PCT,
   INSTANT_REWARD_MIN_PCT,
+  INSTANT_CODE_HOURS,
   PREDICTION_CODE_HOURS,
   PREDICTION_REWARD_MAX_PCT,
   PREDICTION_REWARD_MIN_PCT,
@@ -11,6 +12,7 @@ import {
   INSTANT_REWARD_PCTS,
   rollPredictionRewardPct,
   rewardPctFor,
+  instantCodeValidUntil,
   predictionCodeValidUntil,
   lockOpensOn,
   couponAmountWon,
@@ -189,4 +191,21 @@ test("공개 시각: 오후가는 16:00 전에 내보내지 않는다", () => {
   // 지난 날짜는 늘 공개, 앞선 날짜는 늘 비공개.
   assert.equal(isPublicAt("2026-09-21", "pm", { date: d, hour: 7 }), true);
   assert.equal(isPublicAt("2026-09-23", "am", { date: d, hour: 7 }), false);
+});
+
+/* 안정형은 그 자리에서 받고 그 자리에서 쓰라는 쿠폰이라 3시간으로 끊는다.
+   공격형은 내일 06:00 판정을 보고 와야 하므로 하루를 준다. */
+test("안정형 쿠폰은 발급 시각 + 3시간", () => {
+  assert.equal(INSTANT_CODE_HOURS, 3);
+  assert.equal(instantCodeValidUntil("2026-09-22T05:10:00.000Z"), "2026-09-22T08:10:00.000Z");
+  // 날짜를 넘겨도 시각만 더한다
+  assert.equal(instantCodeValidUntil("2026-09-22T22:30:00.000Z"), "2026-09-23T01:30:00.000Z");
+});
+
+test("안정형이 공격형보다 짧다", () => {
+  const 발급 = "2026-09-22T05:00:00.000Z";
+  assert.ok(
+    new Date(instantCodeValidUntil(발급)) < new Date(predictionCodeValidUntil(발급)),
+    "안정형이 더 길면 '지금 바로' 라고 말할 이유가 없다",
+  );
 });

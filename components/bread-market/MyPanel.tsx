@@ -4,14 +4,17 @@ import { breadOf, quoteAt, won } from "@/lib/bread-market/engine";
 import { lockPhaseOf } from "@/lib/bread-market/flow";
 import {
   CONSUMER_REWARD_NOTICE,
+  INSTANT_CODE_HOURS,
   INSTANT_REWARD_MAX_PCT,
   INSTANT_REWARD_MIN_PCT,
   SESSION_LABEL,
   lockProtection,
 } from "@/lib/bread-market/reward-policy";
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { resetBreadState, useBreadState, useSession } from "@/lib/bread-market/store";
 import { useBreadMarket } from "./context";
+import type { InstantReward } from "@/lib/bread-market/visitor-data";
 import { Photo } from "./sheets";
 
 /* MY: 비로그인 · 이 브라우저 기준. 가격 잠금 → 구매 → 예측 → 할인코드 순서로 보여줍니다.
@@ -24,6 +27,46 @@ const RESULT_LABEL: Record<string, { title: string; tone: string }> = {
   miss: { title: "미적중", tone: "flat" },
   void: { title: "무효 · 가격 동일", tone: "flat" },
 };
+
+/* 안정형 쿠폰의 남은 시간. 3시간짜리라 분 단위로는 급한 게 안 보여서 초까지 센다.
+
+   서버는 만료된 쿠폰을 아예 내려보내지 않지만(visitor-data.ts loadInstantRewards),
+   페이지는 서버 렌더라 열어둔 탭에서는 그 필터가 다시 돌지 않는다. 0 이 되면
+   여기서 남은 줄을 직접 치운다.
+
+   valid_until 이 비어 있으면(옛 쿠폰) 카운트다운을 붙이지 않고 그냥 보여준다. */
+function useRemaining(validUntil: string | null) {
+  const end = validUntil ? new Date(validUntil).getTime() : null;
+  /* 남은 시간을 담지 않고 시계만 돌려 파생시킨다. 담아 두면 만료 시각이 바뀔 때
+     한 틱 동안 옛 값이 남고, effect 안에서 setState 를 다시 불러야 한다. */
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (end === null) return;
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, [end]);
+  return end === null ? null : end - now;
+}
+
+function Countdown({ validUntil }: { validUntil: string | null }) {
+  const left = useRemaining(validUntil);
+  if (left === null) return null;
+  const sec = Math.max(0, Math.floor(left / 1000));
+  const hh = Math.floor(sec / 3600);
+  const mm = Math.floor((sec % 3600) / 60);
+  const ss = sec % 60;
+  const pad = (v: number) => String(v).padStart(2, "0");
+  /* 30분 밑으로 떨어지면 색을 올린다. 그 전에 붉히면 3시간 내내 빨갛다. */
+  const urgent = sec <= 30 * 60;
+  return (
+    <span className={`cdown${urgent ? " is-urgent" : ""}`}>
+      <span className="cdown__l">남은 시간</span>
+      <b className="n" aria-label={`남은 시간 ${hh}시간 ${mm}분 ${ss}초`}>
+        {pad(hh)}:{pad(mm)}:{pad(ss)}
+      </b>
+    </span>
+  );
+}
 
 /* 할인쿠폰 — 코드와 보상만 담는다. 발급 이유는 쿠폰 밖 본문에 쓴다. */
 function CouponCode({ code, note }: { code: string; note?: string }) {
@@ -48,6 +91,26 @@ function CouponCode({ code, note }: { code: string; note?: string }) {
   );
 }
 
+/* 바로 받기 쿠폰 한 줄. 3시간이 지나면 이 줄이 통째로 사라진다. */
+function InstantRow({ reward }: { reward: InstantReward }) {
+  const left = useRemaining(reward.validUntil);
+  /* 만료된 쿠폰은 받았다는 표시로만 내려온다 — 줄로는 그리지 않는다.
+     열어둔 탭에서 카운트다운이 0 에 닿는 순간도 같다. */
+  if (!reward.code || (left !== null && left <= 0)) return null;
+  return (
+    <div className="myrow myrow--stack">
+      <div className="myrow__top">
+        <div className="myrow__t">
+          <b>바로 받기 · {reward.ratePct}% 할인코드</b>
+          <span>발급 후 <strong>{INSTANT_CODE_HOURS}시간</strong> 안에 쓰셔야 해요</span>
+        </div>
+        <div className="myrow__v"><Countdown validUntil={reward.validUntil} /></div>
+      </div>
+      <CouponCode code={reward.code!} note={reward.amountWon ? `${won(reward.amountWon)}원` : undefined} />
+    </div>
+  );
+}
+
 export function MyPanel() {
   const { todayKey, openSheet, predictions: preds, lock: server, instantRewards } = useBreadMarket();
 
@@ -58,7 +121,9 @@ export function MyPanel() {
      할인코드. 유효기간이 지난 코드는 서버가 code 를 비워 내려주고(visitor-data.ts),
      그 줄은 여기서 통째로 사라진다. 다 지나가면 빈 상태로 돌아간다. */
   const live = preds.filter((p) => p.result === "pending" || p.reward?.code);
-  const codes = live.filter((p) => p.reward?.code).length + (server.discountCode ? 1 : 0) + instantRewards.length;
+  /* 만료된 안정형 쿠폰도 내려온다(참여 여부 판정용). 세는 건 쓸 수 있는 것만. */
+  const liveInstant = instantRewards.filter((r) => r.code);
+  const codes = live.filter((p) => p.reward?.code).length + (server.discountCode ? 1 : 0) + liveInstant.length;
   /* 잠금은 서버가 정본이다. localStorage 는 서버 응답이 오기 전에만 쓴다.
      브라우저 기록을 지워도 쿠키가 남아 서버에는 잠금이 그대로 있다.
      로컬만 보면 "잠근 빵이 없어요"라고 해놓고 다시 잠글 때 409 가 난다. */
@@ -74,7 +139,7 @@ export function MyPanel() {
     : my.lock;
   const phase = lockPhaseOf(lock, now, todayKey);
   const lockBread = lock?.tk ? breadOf(lock.tk) : null;
-  const activity = live.length + (lock ? 1 : 0) + instantRewards.length;
+  const activity = live.length + (lock ? 1 : 0) + liveInstant.length;
   const lead = activity === 0 ? "시작해볼까요" : codes > 0 ? "할인코드 도착" : "기록 중";
 
   return (
@@ -138,22 +203,14 @@ export function MyPanel() {
         <div className="sect__h"><h3 className="sect__t">예측과 할인코드</h3></div>
         <div className="mylist">
           {/* 바로 받기 쿠폰. 예측이 아니라 회차에 묶여 있어 목록과 출처가 다르다. */}
-          {instantRewards.map((r) => (
-            <div className="myrow myrow--stack" key={r.roundId}>
-              <div className="myrow__top">
-                <div className="myrow__t">
-                  <b>바로 받기 · {r.ratePct}% 할인코드</b>
-                  <span>오늘 예측 대신 받았어요</span>
-                </div>
-              </div>
-              <CouponCode code={r.code} note={r.amountWon ? `${won(r.amountWon)}원` : undefined} />
-            </div>
+          {liveInstant.map((r) => (
+            <InstantRow key={r.roundId} reward={r} />
           ))}
-          {live.length === 0 && instantRewards.length === 0 ? (
+          {live.length === 0 && liveInstant.length === 0 ? (
             <div className="empty">
               <i aria-hidden="true">🧭</i>
               <b>아직 예측 기록이 없어요</b>
-              <span>안정형은 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 확정<br />공격형은 맞히면 더 크게</span>
+              <span>안정형은 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 확정 · {INSTANT_CODE_HOURS}시간 안에 사용<br />공격형은 맞히면 더 크게</span>
               <br />
               <button className="empty__cta" onClick={() => openSheet({ type: "predict" })}>내일 가격 예측하기</button>
             </div>
