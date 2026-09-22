@@ -663,7 +663,7 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
           {taken.code
             ? `쿠폰번호와 남은 시간은 MY 에서 볼 수 있어요. ${INSTANT_CODE_HOURS}시간이 지나면 사라져요.`
             : "이번 회차 몫은 안정형으로 받으셨어요."}
-          {" "}예측은 다음 장에 다시 열려요 — 회차당 한 번, 둘 중 하나만이에요.
+          {" "}예측은 다음 날에 다시 열려요 — 회차당 한 번, 둘 중 하나만이에요.
         </p>
       </Sheet>
     );
