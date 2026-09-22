@@ -29,7 +29,7 @@ import {
   type ServerPrediction,
   type SheetState,
 } from "./context";
-import { DetailSheet, LockedDetailSheet, LockSheet, PredictSheet } from "./sheets";
+import { DetailSheet, HistorySheet, LockedDetailSheet, LockSheet, PredictSheet } from "./sheets";
 
 const NEXT_PUBLISH: Record<Session, string> = { am: "16:00 오후가", pm: "02:00 정가", list: "06:00 오전가" };
 
@@ -282,6 +282,7 @@ export function BreadMarketShell({
             {sheet.type === "locked-detail" ? <LockedDetailSheet key={`ld-${sheet.tk}`} tk={sheet.tk} onClose={closeSheet} /> : null}
             {sheet.type === "predict" ? <PredictSheet key="p" onClose={closeSheet} /> : null}
             {sheet.type === "lock" ? <LockSheet key={`l-${sheet.tk}`} tk={sheet.tk} onClose={closeSheet} /> : null}
+            {sheet.type === "history" ? <HistorySheet key="h" onClose={closeSheet} /> : null}
           </BreadMarketContext.Provider>
         ) : null}
       </div>

@@ -8,6 +8,7 @@ export type SheetState =
   | { type: "locked-detail"; tk: string }
   | { type: "predict" }
   | { type: "lock"; tk: string }
+  | { type: "history" }
   | null;
 
 /* 서버 로더가 내려주는 모양 그대로다. 두 벌로 두면 한쪽만 고쳐져 어긋난다. */

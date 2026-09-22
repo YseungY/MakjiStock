@@ -765,3 +765,76 @@ export function PredictSheet({ onClose }: { onClose: () => void }) {
     </Sheet>
   );
 }
+
+/* ══════════════════════════════════════════
+   내 기록 — MY 상단 통계를 누르면 열린다.
+
+   다른 "누르면 자세히" 가 전부 시트로 열리는데 여기만 아래로 펼치면 같은 동작이
+   화면마다 다르게 보인다. 목록도 길어져 아래 내용을 밀어낸다.
+   ══════════════════════════════════════════ */
+const HISTORY_LABEL: Record<string, { title: string; tone: string }> = {
+  pending: { title: "판정 대기", tone: "flat" },
+  hit: { title: "적중", tone: "down" },
+  miss: { title: "미적중", tone: "flat" },
+  void: { title: "무승부", tone: "flat" },
+};
+
+export function HistorySheet({ onClose }: { onClose: () => void }) {
+  const { predictions, instantRewards } = useBreadMarket();
+  const plays = predictions.length + instantRewards.length;
+  const hits = predictions.filter((p) => p.result === "hit" || p.result === "void").length;
+  /* reward_rate_pct 는 제출할 때 박히므로 판정 전에도 0 이 아니다. 판정된 것만 센다. */
+  const codes =
+    predictions.filter((p) => (p.result === "hit" || p.result === "void") && p.reward_rate_pct > 0).length +
+    instantRewards.length;
+
+  return (
+    <Sheet title="내 기록" onClose={onClose}>
+      <div className="histsum">
+        <div><b className="n">{plays}</b><span>참여</span></div>
+        <div><b className="n">{hits}</b><span>적중</span></div>
+        <div><b className="n">{codes}</b><span>받은 코드</span></div>
+      </div>
+
+      {plays === 0 ? (
+        <p className="note" style={{ textAlign: "center", marginTop: 18 }}>
+          아직 기록이 없어요. 하루 한 번, 안정형으로 바로 받거나 내일 가격을 맞혀보세요.
+        </p>
+      ) : (
+        <ul className="histlist">
+          {instantRewards.map((r) => (
+            <li className="histrow" key={`i-${r.roundId}`}>
+              <div>
+                <b>{r.product?.name ?? "바로 받기"}</b>
+                <span className="n">{r.roundId.slice(0, 10)} · 안정형으로 바로 받음</span>
+              </div>
+              <em className="down">{r.ratePct}%</em>
+            </li>
+          ))}
+          {predictions.map((p) => {
+            const label = HISTORY_LABEL[p.result] ?? HISTORY_LABEL.pending;
+            const diff = p.result_price_won !== null ? p.result_price_won - p.reference_price_won : null;
+            return (
+              <li className="histrow" key={p.id}>
+                <div>
+                  <b>{p.products?.name ?? ""} · {p.direction === "up" ? "오른다" : "내린다"}</b>
+                  <span className="n">
+                    {p.target_publish_date} 오전가 · 기준가 {won(p.reference_price_won)}원
+                    {diff !== null
+                      ? ` → ${won(p.result_price_won!)}원 (${diff > 0 ? "+" : diff < 0 ? "−" : ""}${won(Math.abs(diff))}원)`
+                      : ""}
+                  </span>
+                </div>
+                <em className={label.tone}>{label.title}</em>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      <p className="note" style={{ marginTop: 14 }}>
+        비로그인이라 이 브라우저 기준입니다. 쿠키를 지우면 기록도 사라져요. 최근 100회까지 보여드려요.
+      </p>
+    </Sheet>
+  );
+}

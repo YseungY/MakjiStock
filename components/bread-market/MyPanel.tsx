@@ -131,7 +131,6 @@ export function MyPanel() {
   const my = useBreadState();
   const now = useSession();
   const session = now.session;
-  const [showAll, setShowAll] = useState(false);
   /* 결과를 기다리는 예측, 아직 쓸 수 있는 할인코드, 그리고 오늘 판정이 난 예측.
      유효기간이 지난 코드는 서버가 code 를 비워 내려주고(visitor-data.ts) 그 줄은
      여기서 사라진다.
@@ -220,22 +219,13 @@ export function MyPanel() {
         <div className="myhead__k">MY MAKJI</div>
         <h2 className="myhead__t">오늘도 한 조각,<br /><em>{lead}</em></h2>
         <div className="myhead__st">
-          {/* 눌러서 지난 기록을 펼친다. 평소에는 진행 중인 것과 오늘 결과만 둔다. */}
-          <button
-            type="button"
-            className={`mystat${showAll ? " is-on" : ""}`}
-            onClick={() => setShowAll((v) => !v)}
-            aria-expanded={showAll}
-          >
+          {/* 누르면 기록 시트가 열린다. 다른 "누르면 자세히" 와 같은 방식이다 —
+              아래로 펼치면 여기만 동작이 다르고 목록이 길어져 뒷내용을 민다. */}
+          <button type="button" className="mystat" onClick={() => openSheet({ type: "history" })}>
             <b className="n">{totalPlays}</b>
             <span>참여 누적 {totalPlays > 0 ? `· 적중 ${totalHits}` : ""}</span>
           </button>
-          <button
-            type="button"
-            className={`mystat${showAll ? " is-on" : ""}`}
-            onClick={() => setShowAll((v) => !v)}
-            aria-expanded={showAll}
-          >
+          <button type="button" className="mystat" onClick={() => openSheet({ type: "history" })}>
             <b className="n">{totalCodes}</b>
             <span>받은 코드 {codes > 0 ? `· 지금 ${codes}` : ""}</span>
           </button>
@@ -307,7 +297,7 @@ export function MyPanel() {
           {liveInstant.map((r) => (
             <InstantRow key={r.roundId} reward={r} />
           ))}
-          {(showAll ? preds : live).length === 0 && liveInstant.length === 0 ? (
+          {live.length === 0 && liveInstant.length === 0 ? (
             tookInstant ? (
               /* 안정형으로 받았고 3시간이 지났다. 회차는 이미 썼으니 다시 권하지 않는다. */
               <div className="empty">
@@ -327,7 +317,7 @@ export function MyPanel() {
               </div>
             )
           ) : (
-            (showAll ? preds : live).map((p) => {
+            live.map((p) => {
               const b = p.products?.ticker ? breadOf(p.products.ticker) : null;
               const label = RESULT_LABEL[p.result] ?? RESULT_LABEL.pending;
               const diff = p.result_price_won !== null ? p.result_price_won - p.reference_price_won : null;
