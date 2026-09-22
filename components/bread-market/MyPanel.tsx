@@ -122,6 +122,10 @@ export function MyPanel() {
   const live = preds.filter((p) => p.result === "pending" || p.reward?.code);
   /* 만료된 안정형 쿠폰도 내려온다(참여 여부 판정용). 세는 건 쓸 수 있는 것만. */
   const liveInstant = instantRewards.filter((r) => r.code);
+  /* 회차의 한 번을 안정형으로 썼나. 쿠폰이 3시간 뒤 사라져도 이 사실은 남는다 —
+     모르면 빈 상태가 "내일 가격 예측하기" 를 다시 권하고, 눌러도 서버가 막는다
+     (predictions/route.ts). 마켓 카드와 같은 판정이다. */
+  const tookInstant = instantRewards.some((r) => r.roundId === `${todayKey}-am`);
   const codes = live.filter((p) => p.reward?.code).length + (server.discountCode ? 1 : 0) + liveInstant.length;
   /* 잠금은 서버가 정본이다. localStorage 는 서버 응답이 오기 전에만 쓴다.
      브라우저 기록을 지워도 쿠키가 남아 서버에는 잠금이 그대로 있다.
@@ -234,13 +238,24 @@ export function MyPanel() {
             <InstantRow key={r.roundId} reward={r} />
           ))}
           {live.length === 0 && liveInstant.length === 0 ? (
-            <div className="empty">
-              <i aria-hidden="true">🧭</i>
-              <b>아직 예측 기록이 없어요</b>
-              <span>안정형은 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 확정 · {INSTANT_CODE_HOURS}시간 안에 사용<br />공격형은 맞히면 더 크게</span>
-              <br />
-              <button className="empty__cta" onClick={() => openSheet({ type: "predict" })}>내일 가격 예측하기</button>
-            </div>
+            tookInstant ? (
+              /* 안정형으로 받았고 3시간이 지났다. 회차는 이미 썼으니 다시 권하지 않는다. */
+              <div className="empty">
+                <i aria-hidden="true">🎟️</i>
+                <b>오늘 쿠폰을 받았어요</b>
+                <span>안정형으로 받으셔서 오늘 예측은 끝났어요<br />{INSTANT_CODE_HOURS}시간이 지나 쿠폰은 사라졌어요</span>
+                <br />
+                <Link className="empty__cta" href="/market#mktlist">내일 다시 만나요</Link>
+              </div>
+            ) : (
+              <div className="empty">
+                <i aria-hidden="true">🧭</i>
+                <b>아직 예측 기록이 없어요</b>
+                <span>안정형은 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 확정 · {INSTANT_CODE_HOURS}시간 안에 사용<br />공격형은 맞히면 더 크게</span>
+                <br />
+                <button className="empty__cta" onClick={() => openSheet({ type: "predict" })}>내일 가격 예측하기</button>
+              </div>
+            )
           ) : (
             live.map((p) => {
               const b = p.products?.ticker ? breadOf(p.products.ticker) : null;
