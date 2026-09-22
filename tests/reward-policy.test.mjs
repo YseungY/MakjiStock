@@ -46,22 +46,33 @@ test("허용 쿠폰율 = 38 − D (정가 기준 %p)", () => {
   assert.equal(finalCouponPct(5, 6200, 10000), 0); // 이미 38%
 });
 
-test("정액 코드 금액은 정가 기준 10원 내림이고 실효 할인 38%를 넘지 않는다", () => {
+test("정액 코드 금액은 판매가 기준 10원 내림이고 실효 할인 38%를 넘지 않는다", () => {
   for (const base of [1500, 3800, 4500, 11000, 21000]) {
     for (let price = Math.round(base * 0.62 / 10) * 10; price <= base * 1.28; price += 10) {
-      for (const rate of [5]) {
+      for (const rate of [5, 15, 20]) {
         const amount = couponAmountWon(rate, price, base);
         assert.equal(amount % 10, 0);
-        assert.ok(amount <= base * rate / 100 + 1e-9);
+        assert.ok(amount <= price * rate / 100 + 1e-9, `${base}/${price}/${rate} 가 판매가의 ${rate}% 를 넘는다`);
         assert.ok(effectiveDiscountPct(price - amount, base) <= 38 + 1e-9, `${base}/${price}/${rate}`);
       }
     }
   }
-  // 정가 기준이라 빵마다 금액이 고정된다
-  assert.equal(couponAmountWon(5, 4050, 4500), 220); // 모닝롤
-  assert.equal(couponAmountWon(5, 9900, 11000), 550); // 테트리스
-  assert.equal(couponAmountWon(5, 1360, 1500), 70); // 머핀
-  assert.equal(couponAmountWon(5, 6500, 10000), 300); // 35% 할인 중 → 3%p 만
+  // 지금 붙어 있는 판매가에 곱한다 — 상품이 싸진 만큼 쿠폰도 같이 작아진다
+  assert.equal(couponAmountWon(5, 4050, 4500), 200); // 모닝롤 4,050 의 5%
+  assert.equal(couponAmountWon(5, 9900, 11000), 490); // 테트리스 9,900 의 5%
+  assert.equal(couponAmountWon(5, 1360, 1500), 60); // 머핀 1,360 의 5%
+  assert.equal(couponAmountWon(5, 6500, 10000), 190); // 35% 할인 중 → 3%p 로 잘리고 6,500 의 3%
+});
+
+/* 정가에 곱하던 때는 실효 할인이 딱 38% 에 닿았다. 판매가에 곱하면 두 할인이
+   곱으로 쌓여 늘 그 아래에서 멈춘다 — (1−d)(1−r) ≥ 1−d−r. */
+test("쿠폰은 판매가 기준이라 상한에 닿기 전에 멈춘다", () => {
+  const base = 10000, sale = 8000; // 20% 할인 중 → 쿠폰 여력 18%p
+  const amount = couponAmountWon(18, sale, base);
+  assert.equal(amount, 1440); // 8,000 의 18%
+  const eff = effectiveDiscountPct(sale - amount, base);
+  assert.ok(eff < 38, `${eff}% — 곱으로 쌓이면 38% 에 못 미친다`);
+  assert.ok(eff > 30, `${eff}% — 그렇다고 너무 적게 주지는 않는다`);
 });
 
 test("예측 판정과 메시지", () => {

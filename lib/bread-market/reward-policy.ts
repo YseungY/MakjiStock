@@ -144,13 +144,23 @@ export function finalCouponPct(ratePct: number, salePriceWon: number, basePriceW
 }
 
 /**
- * 정액 할인코드 금액(원) — 정가 × 최종 쿠폰율, 10원 단위 내림.
- * 정가 기준이라 빵마다 금액이 고정된다(모닝롤 5% = 220원). 발급 시점 할인율이 높아
- * 합계가 38% 를 넘으면 그만큼 줄어든다. 결제가가 정가의 62% 아래로 내려가지 않게 한 번 더 보정한다.
+ * 쿠폰 금액(원) — 지금 붙어 있는 판매가에 보상률을 곱하고 10원 단위로 내린다.
+ *
+ * 쿠폰은 "이 가격에서 N% 더" 라는 약속이다. 정가에 곱하면 상품이 이미 싸진 날에
+ * 정가 시절 기준의 금액이 나가 실제 체감보다 크게 깎인다.
+ *
+ * Cafe24 할인코드는 정액만 받으므로(discount-code.ts discount_value_unit "W")
+ * 퍼센트를 여기서 원으로 바꿔 보낸다. 쓰인 판매가는 reward_claims 의
+ * sale_price_won_at_issue 에 남는다.
+ *
+ * 38% 상한은 그대로 지켜진다. finalCouponPct 가 보상률을 (38 − 현재 할인율)%p
+ * 로 자르는데, 판매가에 곱하면 실효 할인이 두 값의 합보다 늘 작기 때문이다 —
+ * (1−d)(1−r) ≥ 1−d−r. 정가에 곱할 때는 딱 38% 에 닿았고 지금은 그 아래에서 멈춘다.
+ * 결제가가 정가의 62% 아래로 내려가지 않게 한 번 더 보정한다.
  */
 export function couponAmountWon(ratePct: number, salePriceWon: number, basePriceWon: number) {
   const pct = finalCouponPct(ratePct, salePriceWon, basePriceWon);
-  let amount = Math.floor((basePriceWon * pct) / 100 / 10) * 10;
+  let amount = Math.floor((salePriceWon * pct) / 100 / 10) * 10;
   const floorPrice = basePriceWon * (1 - TOTAL_CAP_PCT / 100);
   while (amount > 0 && salePriceWon - amount < floorPrice) amount -= 10;
   return Math.max(0, amount);
