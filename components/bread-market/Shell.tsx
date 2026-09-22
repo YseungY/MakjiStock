@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BREADS,
@@ -141,6 +141,7 @@ export function BreadMarketShell({
 
   const todayKey = useTodayKey() ?? clock.todayKey;
   const pathname = usePathname();
+  const router = useRouter();
   const { session } = useSession();
   const [sheet, setSheet] = useState<SheetState>(null);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -157,6 +158,17 @@ export function BreadMarketShell({
       })
       .catch(() => {});
   }, []);
+
+  /* 장이 넘어가면 서버 데이터를 다시 받는다. 오후가는 16:00 전까지 내려오지
+     않으므로(market-data.ts isPublicAt), 열어둔 탭은 시계만 pm 으로 넘어가고
+     값이 없어 정가로 떨어진다. 첫 렌더는 서버가 같은 장으로 그려준 것이라
+     건너뛴다 — 아니면 열 때마다 한 번씩 더 받아온다. */
+  const seenSession = useRef(session);
+  useEffect(() => {
+    if (seenSession.current === session) return;
+    seenSession.current = session;
+    router.refresh();
+  }, [session, router]);
 
   /* 잠금도 서버가 정본이다. 마켓 화면이 localStorage 만 보면 MY 와 어긋난다.
      값은 이미 props 로 와 있으니 받아올 것은 없고, localStorage 만 맞춰 둔다. */

@@ -1,4 +1,5 @@
 import { decryptSecret } from "@/lib/crypto";
+import { isPublicAt } from "@/lib/bread-market/reward-policy";
 import { kstNow } from "@/lib/market/calendar";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { readVisitorHash } from "@/lib/visitor";
@@ -58,6 +59,16 @@ export async function loadLock(): Promise<LockData> {
   if (error) throw new Error(error.message);
   if (!data) return EMPTY_LOCK;
 
+  /* 보호가 시작되기 전에는 차액 금액도 상태도 감춘다. 오후가 크론이 15시대에
+     돌아 16:00 전에 이미 쿠폰이 발급돼 있는데, 금액을 내려보내면 잠금가 + 금액
+     으로 오후가가 역산되고 status("protecting") 하나만으로도 오후가가 잠금가보다
+     올랐다는 게 드러난다. 아래에서 discountCode 를 막는 것과 같은 이유다.
+
+     protect_from 타임스탬프 대신 시장 시계로 잰다. 보호 시작은 곧 그 날짜의
+     오후가 공개 시각이라 판정이 같고, DEV_KST_* 가 듣지 않는 Date.now() 를
+     섞지 않아야 시세 필터와 같은 시계로 움직인다. */
+  const protectStarted = isPublicAt(data.lock_date, "pm", kstNow());
+
   /* 차액 할인코드는 이메일로 보내지 않고 여기서 바로 내려준다. */
   let discountCode: string | null = null;
   let validUntil: string | null = null;
@@ -74,10 +85,8 @@ export async function loadLock(): Promise<LockData> {
        시작: 오후가 크론은 15시대에 돌아 16:00 공개를 준비한다. 그래서 16:00 전에
        이미 쿠폰이 발급돼 있는데, 그때 보여주면 몰에서 아직 쓸 수 없는 코드를
        쥐여주는 것이고 차액으로 오후가까지 역산된다. */
-    const now = Date.now();
-    const started = claim?.valid_from ? new Date(claim.valid_from).getTime() <= now : true;
-    const expired = claim?.valid_until ? new Date(claim.valid_until).getTime() <= now : false;
-    if (claim?.discount_code_ciphertext && started && !expired) {
+    const expired = claim?.valid_until ? new Date(claim.valid_until).getTime() <= Date.now() : false;
+    if (claim?.discount_code_ciphertext && protectStarted && !expired) {
       try {
         discountCode = decryptSecret(claim.discount_code_ciphertext);
         validUntil = claim.valid_until;
@@ -93,8 +102,8 @@ export async function loadLock(): Promise<LockData> {
       lock_date: data.lock_date,
       lock_session: data.lock_session as "am" | "pm",
       locked_price_won: data.locked_price_won,
-      lock_code_amount_won: data.lock_code_amount_won,
-      status: data.status,
+      lock_code_amount_won: protectStarted ? data.lock_code_amount_won : null,
+      status: !protectStarted && data.status === "protecting" ? "active" : data.status,
       products: oneProduct(data.products),
     },
     discountCode,

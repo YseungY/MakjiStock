@@ -1,4 +1,6 @@
+import { kstNow } from "@/lib/market/calendar";
 import { supabaseAdmin } from "@/lib/supabase/admin";
+import { isPublicAt } from "./reward-policy";
 
 /* 화면이 쓰는 시세. daily_prices 를 그대로 내보낸다.
    클라이언트에서 다시 계산하지 않는다 — 화면 숫자와 Cafe24 에 보낸 값이
@@ -50,8 +52,12 @@ export async function loadMarketData(): Promise<MarketData> {
 
   const tickerById = new Map((products ?? []).map((p) => [p.id, p.ticker]));
 
+  /* 공개 시각 전의 행은 내보내지 않는다. 화면은 시계로 세션을 골라 멀쩡해 보여도
+     이 배열이 그대로 /api/market 과 첫 HTML 에 실려 나간다 (page-data.ts). */
+  const now = kstNow();
   const quotes = (prices ?? [])
     .filter((row) => tickerById.has(row.product_id))
+    .filter((row) => isPublicAt(row.publish_date, row.price_session as "am" | "pm", now))
     .map((row) => ({
       ticker: tickerById.get(row.product_id)!,
       publishDate: row.publish_date,

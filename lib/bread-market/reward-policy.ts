@@ -34,6 +34,24 @@ export function sessionOfHour(hour: number): Session {
   return "list";
 }
 
+/** 이 확정가를 지금 내보내도 되는가.
+
+    Hobby 크론은 분을 무시하고 시간대 안 아무 때나 돈다(docs/네이버-검색지수-도착시각.md).
+    그래서 오전가는 05시대, 오후가는 15시대에 daily_prices 에 쓰이는데, 쓰인 순간
+    내보내면 06:00·16:00 공개가 매일 다른 시각에 새어 나간다. 저장 시각이 아니라
+    세션이 약속한 시각으로 판정한다.
+
+    hour 는 시장 시계다 — 00~01시는 전날 24·25시로 들어오므로 전날 오후가가
+    보호 구간 끝까지 그대로 공개된 상태로 남는다. */
+export function isPublicAt(
+  publishDate: string,
+  session: "am" | "pm",
+  now: { date: string; hour: number },
+) {
+  if (publishDate !== now.date) return publishDate < now.date;
+  return now.hour >= (session === "pm" ? 16 : 6);
+}
+
 /* 예측에 리스크/리워드를 붙인다. 둘 다 랜덤이지만 보이는 방식이 다르다.
 
      안정형 투자 — 10~15% 중 하나. 회차마다 정해지고 고르기 전에 숫자를 보여준다.

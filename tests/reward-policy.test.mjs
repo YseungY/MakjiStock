@@ -21,6 +21,7 @@ import {
   resolveDirection,
   rewardMessage,
   sessionOfHour,
+  isPublicAt,
 } from "../lib/bread-market/reward-policy.ts";
 
 test("세션: 06–15 오전장, 16–23 오후장, 00–05 정가", () => {
@@ -152,4 +153,19 @@ test("판정은 제출 때 약속한 값을 쓴다", () => {
   assert.equal(rewardPctFor("hit", 17), 17);
   assert.equal(rewardPctFor("void", 17), 17);
   assert.equal(rewardPctFor("miss", 17), 0);
+});
+
+test("공개 시각: 오후가는 16:00 전에 내보내지 않는다", () => {
+  const d = "2026-09-22";
+  // 오후가 크론은 15시대 아무 때나 돈다 — 그때 이미 DB 에 있다.
+  assert.equal(isPublicAt(d, "pm", { date: d, hour: 15 }), false);
+  assert.equal(isPublicAt(d, "pm", { date: d, hour: 16 }), true);
+  // 오전가도 같다. 크론은 05시대에 돈다.
+  assert.equal(isPublicAt(d, "am", { date: d, hour: 5 }), false);
+  assert.equal(isPublicAt(d, "am", { date: d, hour: 6 }), true);
+  // 00~01시는 시장 시계의 24·25시 — 전날 오후가가 보호 구간 끝까지 공개된다.
+  assert.equal(isPublicAt(d, "pm", { date: d, hour: 25 }), true);
+  // 지난 날짜는 늘 공개, 앞선 날짜는 늘 비공개.
+  assert.equal(isPublicAt("2026-09-21", "pm", { date: d, hour: 7 }), true);
+  assert.equal(isPublicAt("2026-09-23", "am", { date: d, hour: 7 }), false);
 });
