@@ -77,7 +77,11 @@ a{color:inherit;text-decoration:none}
 .device{
   position:relative;z-index:2;
   width:min(430px,100vw);
+  /* 사파리의 100vh 는 툴바가 숨겨진 상태의 큰 뷰포트라, 그 값으로 잡으면
+     컨테이너 바닥이 툴바 뒤로 밀린다. dvh 가 지금 보이는 높이다.
+     앞줄은 dvh 를 모르는 브라우저용 폴백이라 순서를 바꾸면 안 된다. */
   height:min(932px,100vh);
+  height:min(932px,100dvh);
   background:var(--paper);
   overflow:hidden;
   display:flex;flex-direction:column;
@@ -686,16 +690,6 @@ body{display:grid;place-items:center}
 .sessionBar{display:flex;align-items:center;gap:6px;padding:0 18px 10px;color:var(--ink-3);font-size:10.5px;font-weight:600;white-space:nowrap}
 .sessionBar>i{width:5px;height:5px;flex:none;border-radius:50%;background:#43B97F;box-shadow:0 0 0 0 rgba(67,185,127,.5);animation:pulse 2.4s infinite}
 .sessionBar strong{color:var(--ink-3);font-weight:600}
-.bottomNav{
-  position:fixed;left:50%;bottom:0;z-index:70;display:grid;grid-template-columns:repeat(2,1fr);
-  width:min(430px,100vw);transform:translateX(-50%);padding:7px 8px calc(9px + env(safe-area-inset-bottom));
-  border-top:1px solid var(--line);background:rgba(251,248,243,.97);backdrop-filter:saturate(1.5) blur(18px);
-  box-shadow:0 -6px 18px rgba(21,23,30,.05);
-}
-.bottomNav a{position:relative;display:grid;place-items:center;min-height:42px;padding:7px 0 5px;color:var(--ink-3);font-size:12px;font-weight:800;letter-spacing:-.01em}
-.bottomNav a::before{content:"";position:absolute;top:-7px;left:32%;right:32%;height:2.5px;border-radius:0 0 3px 3px;background:transparent}
-.bottomNav a.active{color:var(--ink)}
-.bottomNav a.active::before{background:var(--blue)}
 .marketScreen{padding:0 0 96px}
 .eyebrow{display:inline-block;margin-bottom:7px;color:var(--blue);font-size:9.5px;font-weight:800;letter-spacing:.2em}
 
