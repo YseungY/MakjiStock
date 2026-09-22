@@ -937,9 +937,7 @@ body{display:grid;place-items:center}
 .riskpick__x b{color:var(--ink-2);font-weight:800}
 .riskpick__x strong{color:var(--ink);font-weight:800}
 
-/* 안정형 쿠폰 남은 시간 — 3시간짜리라 초까지 센다 (MyPanel Countdown) */
+/* 안정형 쿠폰 남은 시간 — 3시간짜리라 초까지 세고 내내 붉게 둔다 (MyPanel Countdown) */
 .cdown{display:block;text-align:right;line-height:1.25}
-.cdown__l{display:block;font-size:9px;font-weight:700;color:var(--ink-3);letter-spacing:.04em}
-.cdown b{display:block;font-size:14px;font-weight:800;letter-spacing:-.01em;color:var(--ink-2);margin-top:1px}
-.cdown.is-urgent b{color:var(--up)}
-.cdown.is-urgent .cdown__l{color:var(--up)}
+.cdown__l{display:block;font-size:9px;font-weight:700;color:var(--up);letter-spacing:.04em}
+.cdown b{display:block;font-size:14px;font-weight:800;letter-spacing:-.01em;color:var(--up);margin-top:1px}

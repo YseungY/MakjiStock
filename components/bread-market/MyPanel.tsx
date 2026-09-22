@@ -56,10 +56,9 @@ function Countdown({ validUntil }: { validUntil: string | null }) {
   const mm = Math.floor((sec % 3600) / 60);
   const ss = sec % 60;
   const pad = (v: number) => String(v).padStart(2, "0");
-  /* 30분 밑으로 떨어지면 색을 올린다. 그 전에 붉히면 3시간 내내 빨갛다. */
-  const urgent = sec <= 30 * 60;
+  /* 처음부터 끝까지 빨갛다. 3시간뿐인 쿠폰이라 어느 구간도 여유롭지 않다. */
   return (
-    <span className={`cdown${urgent ? " is-urgent" : ""}`}>
+    <span className="cdown">
       <span className="cdown__l">남은 시간</span>
       <b className="n" aria-label={`남은 시간 ${hh}시간 ${mm}분 ${ss}초`}>
         {pad(hh)}:{pad(mm)}:{pad(ss)}
