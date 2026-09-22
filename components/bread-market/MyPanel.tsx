@@ -138,6 +138,34 @@ export function MyPanel() {
     : my.lock;
   const phase = lockPhaseOf(lock, now, todayKey);
   const lockBread = lock?.tk ? breadOf(lock.tk) : null;
+
+  /* 보호 구간에 들어갔다고 다 "사용 가능" 이 아니다. 오후가가 잠금가 이하면
+     차액이 없어 쿠폰이 발급되지 않는다(lock-codes.ts amount <= 0) — 그냥 지금
+     가격으로 사면 된다. 그걸 "사용 가능" 이라고만 쓰면 없는 쿠폰을 찾게 된다.
+     마켓의 LockCard 와 같은 판정이다. 둘이 어긋나면 화면끼리 다른 말을 한다. */
+  const lockNowPrice = lockBread ? quoteAt(lockBread, todayKey, session).price : 0;
+  const risen = Boolean(lock && lockNowPrice > lock.lockedPrice);
+  const lockState =
+    phase === "holding"
+      ? { label: "보관 중", tone: "flat" }
+      : phase === "purchased"
+        ? { label: "구매 완료", tone: "flat" }
+        : phase !== "protecting"
+          ? { label: "종료", tone: "flat" }
+          : !risen
+            ? { label: "지금 더 싸요", tone: "down" }
+            : server.discountCode
+              ? { label: "사용 가능", tone: "down" }
+              : { label: "쿠폰 준비 중", tone: "flat" };
+  /* 보호 구간에는 쿠폰이 있든 없든 왜 그런지 한 줄 붙는다. */
+  const lockWhy =
+    phase !== "protecting"
+      ? null
+      : server.discountCode
+        ? null // 쿠폰 줄 아래에 따로 쓴다
+        : risen
+          ? "오후가가 올랐어요. 차액 쿠폰을 만들고 있어요 — 잠시 후 다시 확인해주세요."
+          : "오후가가 잠금가보다 싸요. 쿠폰 없이 지금 가격으로 사시면 돼요 — 02:00에 정가로 돌아가기 전에요.";
   const activity = live.length + (lock ? 1 : 0) + liveInstant.length;
   const lead = activity === 0 ? "시작해볼까요" : codes > 0 ? "할인코드 도착" : "기록 중";
 
@@ -156,7 +184,7 @@ export function MyPanel() {
         <div className="sect__h"><h3 className="sect__t">오늘의 가격 잠금</h3></div>
         <div className="mylist">
           {lock && lockBread ? (
-            <div className={`myrow${server.discountCode ? " myrow--stack" : ""}`}>
+            <div className={`myrow${server.discountCode || lockWhy ? " myrow--stack" : ""}`}>
               <div className="myrow__top">
                 <div className="myrow__i myrow__i--ph"><Photo bread={lockBread} /></div>
                 <div className="myrow__t">
@@ -166,10 +194,8 @@ export function MyPanel() {
                   </span>
                 </div>
                 <div className="myrow__v">
-                  <b className={phase === "protecting" ? "down" : "flat"}>
-                    {phase === "holding" ? "보관 중" : phase === "protecting" ? "사용 가능" : phase === "purchased" ? "구매 완료" : "종료"}
-                  </b>
-                  <span>현재 {won(quoteAt(lockBread, todayKey, session).price)}원</span>
+                  <b className={lockState.tone}>{lockState.label}</b>
+                  <span>현재 {won(lockNowPrice)}원</span>
                 </div>
               </div>
               {server.discountCode ? (
@@ -183,6 +209,8 @@ export function MyPanel() {
                     막지 자사몰 가입 후 쿠폰번호를 등록하면 잠금가로 살 수 있어요.
                   </p>
                 </>
+              ) : lockWhy ? (
+                <p className="myrow__why">{lockWhy}</p>
               ) : null}
             </div>
           ) : (
