@@ -23,6 +23,7 @@ import {
   makjiIndexOf,
   predictBreadOf,
   quoteAt,
+  priceSlotAt,
   signed,
   won,
   ymdOf,
@@ -42,6 +43,10 @@ import { useBreadMarket } from "./context";
 import { LockIcon, Photo } from "./sheets";
 
 type Sort = "drop" | "price" | "name";
+/* 화면에 뜬 값이 온 슬롯의 이름. 오후가가 없는 날은 오전가가 올라오므로
+   요청한 장이 아니라 실제 슬롯으로 붙인다 (engine.ts priceSlotAt). */
+const PRICE_SLOT_LABEL: Record<string, string> = { am: "오전가", pm: "오후가", list: "정가" };
+
 const SORTS: { id: Sort; label: string }[] = [
   { id: "drop", label: "할인 많은 순" },
   { id: "price", label: "가격 순" },
@@ -401,8 +406,14 @@ export function MarketPanel() {
           <div className="predcard__b">
             <div>
               <b>{pb.name}{joined ? ` · ${joined.direction === "up" ? "오른다" : "내린다"}` : ""}</b>
+              {/* 판정이 오전가로만 나므로 지금 값도 어느 장의 가격인지 밝힌다.
+                  "지금 N원" 은 그 N 이 오전가인지 오후가인지 말해주지 않는다.
+                  서버가 기준가로 쓰는 값과 같은 세션이다 (predictions/route.ts). */}
               <span>
-                {joined ? `기준가 ${won(joined.reference_price_won)}원` : `지금 ${won(pq.price)}원`} · 내일 06:00 오전가로 판정
+                {joined
+                  ? `기준가 ${won(joined.reference_price_won)}원`
+                  : `${PRICE_SLOT_LABEL[priceSlotAt(pb, todayKey, session)]} ${won(pq.price)}원`}
+                {" · 내일 06:00 오전가로 판정"}
               </span>
             </div>
             <em>{predState}</em>

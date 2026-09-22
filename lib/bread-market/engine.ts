@@ -444,6 +444,18 @@ export function quoteAt(bread: Bread, key: string, session: PriceSession): Quote
   return quoteWith(bread, key, session === "pm" ? fxDropPmOf(key) : fxDropOf(key));
 }
 
+/** 화면에 뜬 값이 실제로 어느 슬롯에서 왔나 — quoteAt 과 같은 순서로 판정한다.
+
+    오후가가 없는 날은 quoteAt 이 오전가로 떨어진다. 그걸 모르고 "오후가 N원"
+    이라고 쓰면 오전가에 오후가 딱지를 붙이게 된다. 확정가가 아예 없으면 "list"
+    (정가) 다. */
+export function priceSlotAt(bread: Bread, key: string, session: PriceSession): PriceSession {
+  if (session === "list") return "list";
+  const slot = realSlotOnDay(bread.tk, key, session);
+  if (slot) return slot;
+  return hasRealData() ? "list" : session;
+}
+
 /** 지금 화면에 뜬 값이 정가인가 — 02:00~05:59 정가 시간이거나, 그 장의 확정가가
     아직 없어 정가로 떨어진 경우다.
 
