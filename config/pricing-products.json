@@ -10,7 +10,7 @@
     "dailyPriceMoveCapPct": null,
     "priceRoundingWon": 10,
     "discountFloorPct": 0,
-    "formulaVersion": "v1.0"
+    "formulaVersion": "v1.1"
   },
   "products": [
     {

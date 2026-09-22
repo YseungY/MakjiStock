@@ -85,7 +85,7 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
   const commit = commitParam === null ? defaultCommit : commitParam === "1";
   const onlyIfMissing = url.searchParams.get("onlyIfMissing") === "1";
 
-  const { formulaVersion = "v1.0", ...pricing } = pricingConfig.pricing as PricingConfig & {
+  const { formulaVersion = "v1.1", ...pricing } = pricingConfig.pricing as PricingConfig & {
     formulaVersion?: string;
   };
   const db = supabaseAdmin();
