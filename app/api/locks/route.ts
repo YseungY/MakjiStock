@@ -4,6 +4,7 @@ import { currentPriceOf } from "@/lib/pricing/current-price";
 import { kstNow } from "@/lib/market/calendar";
 import { supabaseAdmin } from "@/lib/supabase/admin";
 import { loadLock } from "@/lib/bread-market/visitor-data";
+import { issueLockCodes } from "@/lib/locks/lock-codes";
 import { getOrCreateVisitorHash } from "@/lib/visitor";
 
 export const dynamic = "force-dynamic";
@@ -131,6 +132,32 @@ export async function POST(request: Request) {
       );
     }
     return Response.json({ error: error.message }, { status: 502 });
+  }
+
+  /* 오후가가 이미 나와 있으면 그 자리에서 차액 코드를 발급한다.
+
+     오후가 크론은 15시대 아무 때나 돌고(Hobby, ±59분) 그 순간의 명단만
+     집어간다. 그 뒤 15:59 까지 걸린 잠금은 다시 도는 회차가 없어 쿠폰 없이
+     보호 구간에 들어갔다. issueLockCodes 는 reward_claim_id 가 빈 것만 보므로
+     크론과 겹쳐도 두 번 발급되지 않는다.
+
+     폴백으로 올라온 오전가는 발급 대상이 아니다(session 을 직접 본다) —
+     주말처럼 오후가가 없는 날은 몰 가격이 그대로라 차액도 없다. */
+  const pmPrice = await currentPriceOf(productId, date, "pm");
+  if (pmPrice?.session === "pm") {
+    try {
+      await issueLockCodes({
+        lockSession: session,
+        lockDate: date,
+        lockId: inserted.id,
+        priceOf: () => pmPrice.priceWon,
+        commit: true,
+      });
+    } catch (cause) {
+      /* 잠금은 이미 저장됐다. 발급이 실패해도 되돌리지 않는다 — 크론이 돌기 전과
+         같은 상태이고, 그건 원래도 쿠폰이 아직 없는 상태다. */
+      console.error("[locks] 차액 코드 즉시 발급 실패", cause);
+    }
   }
 
   return Response.json({ lock: inserted, protectLabel: window.label }, { status: 201 });

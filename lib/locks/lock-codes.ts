@@ -7,9 +7,13 @@ import { supabaseAdmin } from "@/lib/supabase/admin";
    몰 판매가는 보호 구간에 들어가도 잠금가로 내려가지 않는다. 대신
    `잠금가 - 현재가` 만큼 정액 할인코드를 발급해 잠금가를 실현한다.
 
-   발급 시점
-     16:00  오전 잠금자  → 현재가는 오후가        (오후가 크론에 붙는다)
-     잠금은 오전장에만 받는다. 코드는 보호 구간(16:00~다음 날 01:59) 동안 유효하다.
+   발급 시점 — 둘 다 오전 잠금자에게, 현재가는 오후가다.
+     오후가 크론      그 순간까지 쌓인 잠금을 일괄 발급한다.
+     잠금을 거는 순간  오후가가 이미 나와 있으면 그 자리에서 발급한다.
+   크론은 15시대 아무 때나 돌고(Hobby, ±59분) 그 순간의 명단만 집어가므로,
+   둘째 경로가 없으면 크론 이후 15:59 까지 걸린 잠금은 쿠폰 없이 보호 구간에
+   들어간다. 잠금은 오전장에만 받고, 코드는 보호 구간(16:00~다음 날 01:59)
+   동안 유효하다.
 
    차액이 0 이하면 코드를 만들지 않는다. 이미 잠금가보다 싸다.
 
@@ -43,21 +47,28 @@ export type IssueResult = {
  * @param lockSession  보호가 시작되는 잠금의 세션. 지금은 am(16:00 발급)만 쓴다.
  * @param lockDate     잠금이 걸린 시장 날짜(KST).
  * @param priceOf      상품별 현재 판매가를 돌려준다.
+ * @param lockId       주면 그 잠금 하나만 본다. 오후가가 나온 뒤에 걸린 잠금은
+ *                     크론의 일괄 발급 명단에 못 들어가므로 잠그는 자리에서
+ *                     이 인자로 바로 발급한다 (app/api/locks).
  */
 export async function issueLockCodes({
   lockSession,
   lockDate,
+  lockId,
   priceOf,
   commit,
 }: {
   lockSession: "am" | "pm";
   lockDate: string;
+  lockId?: string;
   priceOf: (productId: string) => number | null;
   commit: boolean;
 }): Promise<IssueResult[]> {
   const db = supabaseAdmin();
 
-  const { data, error } = await db
+  /* reward_claim_id 가 빈 것만 본다. 크론과 잠금 시점 발급이 겹쳐 돌아도
+     같은 잠금에 코드가 두 번 나가지 않는다. */
+  let query = db
     .from("price_locks")
     .select(
       "id,visitor_hash,product_id,lock_session,locked_price_won,protect_from,protect_until,products(ticker,name,cafe24_product_no)",
@@ -66,6 +77,9 @@ export async function issueLockCodes({
     .eq("lock_session", lockSession)
     .eq("status", "active")
     .is("reward_claim_id", null);
+  if (lockId) query = query.eq("id", lockId);
+
+  const { data, error } = await query;
 
   if (error) throw new Error(`잠금 조회 실패: ${error.message}`);
   const locks = (data ?? []) as unknown as LockRow[];
