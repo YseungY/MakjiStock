@@ -293,7 +293,8 @@ export function MarketPanel() {
       {/* 숫자와 색이 서로 다른 것을 재기 때문에 한 줄 적어 둔다. */}
       <div className="sect sect--tight">
         <p className="note">
-          숫자는 <b>정가 대비 할인율</b>이라 화살표는 늘 <b>▼</b>예요. 색이 <b>어제 대비 등락</b>이고요 —
+          숫자는 <b>정가 대비 할인율</b>이라 화살표는 늘 <b>▼</b>예요. 색이 <b>어제 대비 등락</b>이고요.
+          <br />
           빵값이 오른 날은 <b className="up">▼ 빨강</b>, 내린 날은 <b className="down">▼ 파랑</b>,
           어제와 같으면 <b className="flat">— 회색</b>이에요.
         </p>
