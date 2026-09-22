@@ -131,17 +131,10 @@ export function MyPanel() {
   const my = useBreadState();
   const now = useSession();
   const session = now.session;
-  /* 결과를 기다리는 예측, 아직 쓸 수 있는 할인코드, 그리고 오늘 판정이 난 예측.
-     유효기간이 지난 코드는 서버가 code 를 비워 내려주고(visitor-data.ts) 그 줄은
-     여기서 사라진다.
-
-     마지막 조건이 빠져 있었다. 빗나간 예측은 쿠폰이 없어 앞의 둘에 걸리지 않고
-     통째로 사라졌다 — 참여 화면은 "결과는 06:00에 MY 에서 확인할 수 있어요" 라고
-     약속해 놓고 미적중이면 아무것도 안 보여준 것이다. 판정 대상이 오늘 오전가인
-     예측(= 어제 제출분)은 결과가 무엇이든 하루는 남긴다. */
-  const live = preds.filter(
-    (p) => p.result === "pending" || p.reward?.code || p.target_publish_date === todayKey,
-  );
+  /* 이 목록은 지금 할 일만 담는다 — 결과를 기다리는 예측과 아직 쓸 수 있는 코드.
+     판정이 끝났고 쓸 코드도 없는 줄은 기록이지 할 일이 아니다. 그건 내 기록
+     시트(sheets.tsx HistorySheet)가 전부 보여준다. 상단 통계를 누르면 열린다. */
+  const live = preds.filter((p) => p.result === "pending" || p.reward?.code);
   /* 만료된 안정형 쿠폰도 내려온다(참여 여부 판정용). 세는 건 쓸 수 있는 것만. */
   const liveInstant = instantRewards.filter((r) => r.code);
 
@@ -200,16 +193,23 @@ export function MyPanel() {
               ? { label: "사용 가능", tone: "down" }
               : { label: "쿠폰 준비 중", tone: "flat" };
   /* 보호 구간에는 쿠폰이 있든 없든 왜 그런지 한 줄 붙는다. */
+  /* 어느 단계든 한 줄은 있어야 한다. 상태 한 단어만 남으면 지금 뭘 해야 하는지,
+     왜 그런지가 화면에 없다. 쿠폰이 붙는 경우만 여기서 비운다 — 쿠폰 줄 아래에
+     따로 쓰기 때문이다. */
   const lockWhy =
-    phase !== "protecting"
-      ? null
-      : server.discountCode
-        ? null // 쿠폰 줄 아래에 따로 쓴다
-        : risen
-          ? "오후가가 올랐어요. 차액 쿠폰을 만들고 있어요 — 잠시 후 다시 확인해주세요."
-          : cheaper
-            ? "오후가가 잠금가보다 싸요. 쿠폰 없이 지금 가격으로 사시면 돼요 — 02:00에 정가로 돌아가기 전에요."
-            : "오후가가 잠금가와 같아요. 쿠폰 없이 그대로 사시면 돼요 — 02:00에 정가로 돌아가기 전에요.";
+    phase === "holding"
+      ? "16:00에 오후가가 나와요. 오르면 차액만큼 쿠폰을 드리고, 내리면 더 싼 오후가로 사시면 돼요."
+      : phase === "purchased"
+        ? "잠금가로 구매를 마쳤어요. 내일 06:00에 다시 잠글 수 있어요."
+        : phase !== "protecting"
+          ? "잠금가로 살 수 있는 시간이 지났어요. 잠금은 하루 한 번, 내일 06:00에 다시 열려요."
+          : server.discountCode
+            ? null // 쿠폰 줄 아래에 따로 쓴다
+            : risen
+              ? "오후가가 올랐어요. 차액 쿠폰을 만들고 있어요 — 잠시 후 다시 확인해주세요."
+              : cheaper
+                ? "오후가가 잠금가보다 싸요. 쿠폰 없이 지금 가격으로 사시면 돼요 — 02:00에 정가로 돌아가기 전에요."
+                : "오후가가 잠금가와 같아요. 쿠폰 없이 그대로 사시면 돼요 — 02:00에 정가로 돌아가기 전에요.";
   const activity = live.length + (lock ? 1 : 0) + liveInstant.length;
   const lead = activity === 0 ? "시작해볼까요" : codes > 0 ? "할인코드 도착" : "기록 중";
 
@@ -227,7 +227,9 @@ export function MyPanel() {
           </button>
           <button type="button" className="mystat" onClick={() => openSheet({ type: "history" })}>
             <b className="n">{totalCodes}</b>
-            <span>받은 코드 {codes > 0 ? `· 지금 ${codes}` : ""}</span>
+            {/* 누적만 쓰면 만료된 것까지 세어 "1 인데 왜 없지" 가 된다. 지금 쓸 수
+                있는 수를 0 이어도 함께 적는다. */}
+            <span>받은 코드 · 지금 {codes}</span>
           </button>
         </div>
       </div>
@@ -310,8 +312,15 @@ export function MyPanel() {
             ) : (
               <div className="empty">
                 <i aria-hidden="true">🧭</i>
-                <b>아직 예측 기록이 없어요</b>
-                <span>안정형은 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 확정 · {INSTANT_CODE_HOURS}시간 안에 사용<br />공격형은 맞히면 더 크게</span>
+                {/* 지난 기록이 있는 사람에게 "없어요" 라고 하면 기록이 날아간 줄 안다. */}
+                <b>{totalPlays > 0 ? "지금 기다리는 건 없어요" : "아직 예측 기록이 없어요"}</b>
+                <span>
+                  {totalPlays > 0 ? (
+                    <>지난 기록은 위의 숫자를 눌러서 볼 수 있어요<br />오늘 몫은 아직 남아 있어요</>
+                  ) : (
+                    <>안정형은 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 확정 · {INSTANT_CODE_HOURS}시간 안에 사용<br />공격형은 맞히면 더 크게</>
+                  )}
+                </span>
                 <br />
                 <button className="empty__cta" onClick={() => openSheet({ type: "predict" })}>내일 가격 예측하기</button>
               </div>

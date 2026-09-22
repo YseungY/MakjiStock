@@ -41,7 +41,7 @@ import {
   useBreadState,
   useSession,
 } from "@/lib/bread-market/store";
-import { useBreadMarket } from "./context";
+import { useBreadMarket, type ServerPrediction } from "./context";
 
 /* ───────── 공통: 잠금 아이콘 (이모지 대신 선 아이콘) ───────── */
 export function LockIcon({ open = false, filled = false, size = 14 }: { open?: boolean; filled?: boolean; size?: number }) {
@@ -779,6 +779,18 @@ const HISTORY_LABEL: Record<string, { title: string; tone: string }> = {
   void: { title: "무승부", tone: "flat" },
 };
 
+/** 그 줄이 지금 어떤 상태인지 한 줄로. 어느 결과든 빈 줄로 두지 않는다. */
+function whyOf(p: ServerPrediction): string {
+  if (p.result === "pending") return "내일 06:00 오전가가 나오면 판정돼요.";
+  if (p.result === "miss") return "방향이 빗나가 할인코드는 없어요.";
+  // 적중·무승부
+  if (p.reward?.code) return `할인코드를 받았어요 · MY 목록에서 복사할 수 있어요.`;
+  if (p.reward_rate_pct === 0)
+    return "보상률이 0% 인 회차라 할인코드가 없어요. 지금 참여하면 5~20% 중 하나가 걸려요.";
+  if (p.reward) return "할인코드 유효기간이 지났어요.";
+  return "할인코드를 만들고 있어요 — 잠시 후 다시 확인해주세요.";
+}
+
 export function HistorySheet({ onClose }: { onClose: () => void }) {
   const { predictions, instantRewards } = useBreadMarket();
   const plays = predictions.length + instantRewards.length;
@@ -824,6 +836,9 @@ export function HistorySheet({ onClose }: { onClose: () => void }) {
                       ? ` → ${won(p.result_price_won!)}원 (${diff > 0 ? "+" : diff < 0 ? "−" : ""}${won(Math.abs(diff))}원)`
                       : ""}
                   </span>
+                  {/* 결과만 있고 왜 코드가 없는지 없으면 어디 갔나 찾게 된다.
+                      맞혔는데 코드가 안 나온 이유는 셋이다. */}
+                  <span>{whyOf(p)}</span>
                 </div>
                 <em className={label.tone}>{label.title}</em>
               </li>
