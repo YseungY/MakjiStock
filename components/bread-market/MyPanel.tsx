@@ -193,23 +193,6 @@ export function MyPanel() {
               ? { label: "사용 가능", tone: "down" }
               : { label: "쿠폰 준비 중", tone: "flat" };
   /* 보호 구간에는 쿠폰이 있든 없든 왜 그런지 한 줄 붙는다. */
-  /* 어느 단계든 한 줄은 있어야 한다. 상태 한 단어만 남으면 지금 뭘 해야 하는지,
-     왜 그런지가 화면에 없다. 쿠폰이 붙는 경우만 여기서 비운다 — 쿠폰 줄 아래에
-     따로 쓰기 때문이다. */
-  const lockWhy =
-    phase === "holding"
-      ? "16:00에 오후가가 나와요. 오르면 차액만큼 쿠폰을 드리고, 내리면 더 싼 오후가로 사시면 돼요."
-      : phase === "purchased"
-        ? "잠금가로 구매를 마쳤어요. 내일 06:00에 다시 잠글 수 있어요."
-        : phase !== "protecting"
-          ? "잠금가로 살 수 있는 시간이 지났어요. 잠금은 하루 한 번, 내일 06:00에 다시 열려요."
-          : server.discountCode
-            ? null // 쿠폰 줄 아래에 따로 쓴다
-            : risen
-              ? "오후가가 올랐어요. 차액 쿠폰을 만들고 있어요 — 잠시 후 다시 확인해주세요."
-              : cheaper
-                ? "오후가가 잠금가보다 싸요. 쿠폰 없이 지금 가격으로 사시면 돼요 — 02:00에 정가로 돌아가기 전에요."
-                : "오후가가 잠금가와 같아요. 쿠폰 없이 그대로 사시면 돼요 — 02:00에 정가로 돌아가기 전에요.";
   const activity = live.length + (lock ? 1 : 0) + liveInstant.length;
   const lead = activity === 0 ? "시작해볼까요" : codes > 0 ? "할인코드 도착" : "기록 중";
 
@@ -238,7 +221,7 @@ export function MyPanel() {
         <div className="sect__h"><h3 className="sect__t">오늘의 가격 잠금</h3></div>
         <div className="mylist">
           {lock && lockBread ? (
-            <div className={`myrow${server.discountCode || lockWhy ? " myrow--stack" : ""}`}>
+            <div className={`myrow${server.discountCode || phase === "protecting" ? " myrow--stack" : ""}`}>
               <div className="myrow__top">
                 <div className="myrow__i myrow__i--ph"><Photo bread={lockBread} /></div>
                 <div className="myrow__t">
@@ -263,20 +246,14 @@ export function MyPanel() {
                     막지 자사몰 가입 후 쿠폰번호를 등록하면 잠금가로 살 수 있어요.
                   </p>
                 </>
-              ) : lockWhy ? (
-                <>
-                  <p className="myrow__why">{lockWhy}</p>
-                  {/* 쿠폰이 없는 건 지금 가격이 이미 잠금가 이하라서다. 할 일은
-                      하나뿐이니 그 빵 몰로 바로 보낸다. */}
-                  {phase === "protecting" && !risen ? (
-                    <button
-                      className="btn btn--blue btn--sm"
-                      onClick={() => window.open(`/api/out/cafe24/${lock.tk}`, "_blank", "noopener")}
-                    >
-                      지금 {won(lockNowPrice)}원으로 사러 가기
-                    </button>
-                  ) : null}
-                </>
+              ) : phase === "protecting" && !risen ? (
+                /* 쿠폰이 없는 건 지금 가격이 이미 잠금가 이하라서다. 할 일이 하나뿐이니 버튼만 둔다. */
+                <button
+                  className="btn btn--blue btn--sm"
+                  onClick={() => window.open(`/api/out/cafe24/${lock.tk}`, "_blank", "noopener")}
+                >
+                  지금 {won(lockNowPrice)}원으로 사러 가기
+                </button>
               ) : null}
             </div>
           ) : (
@@ -314,13 +291,7 @@ export function MyPanel() {
                 <i aria-hidden="true">🧭</i>
                 {/* 지난 기록이 있는 사람에게 "없어요" 라고 하면 기록이 날아간 줄 안다. */}
                 <b>{totalPlays > 0 ? "지금 기다리는 건 없어요" : "아직 예측 기록이 없어요"}</b>
-                <span>
-                  {totalPlays > 0 ? (
-                    <>지난 기록은 위의 숫자를 눌러서 볼 수 있어요<br />오늘 몫은 아직 남아 있어요</>
-                  ) : (
-                    <>안정형은 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 확정 · {INSTANT_CODE_HOURS}시간 안에 사용<br />공격형은 맞히면 더 크게</>
-                  )}
-                </span>
+                <span>안정형은 {INSTANT_REWARD_MIN_PCT}~{INSTANT_REWARD_MAX_PCT}% 확정 · {INSTANT_CODE_HOURS}시간 안에 사용<br />공격형은 맞히면 더 크게</span>
                 <br />
                 <button className="empty__cta" onClick={() => openSheet({ type: "predict" })}>내일 가격 예측하기</button>
               </div>

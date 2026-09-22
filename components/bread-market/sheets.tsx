@@ -779,16 +779,13 @@ const HISTORY_LABEL: Record<string, { title: string; tone: string }> = {
   void: { title: "무승부", tone: "flat" },
 };
 
-/** 그 줄이 지금 어떤 상태인지 한 줄로. 어느 결과든 빈 줄로 두지 않는다. */
-function whyOf(p: ServerPrediction): string {
-  if (p.result === "pending") return "내일 06:00 오전가가 나오면 판정돼요.";
-  if (p.result === "miss") return "방향이 빗나가 할인코드는 없어요.";
-  // 적중·무승부
-  if (p.reward?.code) return `할인코드를 받았어요 · MY 목록에서 복사할 수 있어요.`;
-  if (p.reward_rate_pct === 0)
-    return "보상률이 0% 인 회차라 할인코드가 없어요. 지금 참여하면 5~20% 중 하나가 걸려요.";
-  if (p.reward) return "할인코드 유효기간이 지났어요.";
-  return "할인코드를 만들고 있어요 — 잠시 후 다시 확인해주세요.";
+/** 결과 옆 꼬리표. 맞혔는데 코드가 없을 때만 왜인지 한 단어로 덧붙인다. */
+function tagOf(p: ServerPrediction): string {
+  if (p.result !== "hit" && p.result !== "void") return "";
+  if (p.reward?.code) return " · 코드";
+  if (p.reward_rate_pct === 0) return " · 보상 0%";
+  if (p.reward) return " · 만료";
+  return " · 발급 중";
 }
 
 export function HistorySheet({ onClose }: { onClose: () => void }) {
@@ -810,7 +807,7 @@ export function HistorySheet({ onClose }: { onClose: () => void }) {
 
       {plays === 0 ? (
         <p className="note" style={{ textAlign: "center", marginTop: 18 }}>
-          아직 기록이 없어요. 하루 한 번, 안정형으로 바로 받거나 내일 가격을 맞혀보세요.
+          아직 기록이 없어요.
         </p>
       ) : (
         <ul className="histlist">
@@ -836,20 +833,15 @@ export function HistorySheet({ onClose }: { onClose: () => void }) {
                       ? ` → ${won(p.result_price_won!)}원 (${diff > 0 ? "+" : diff < 0 ? "−" : ""}${won(Math.abs(diff))}원)`
                       : ""}
                   </span>
-                  {/* 결과만 있고 왜 코드가 없는지 없으면 어디 갔나 찾게 된다.
-                      맞혔는데 코드가 안 나온 이유는 셋이다. */}
-                  <span>{whyOf(p)}</span>
                 </div>
-                <em className={label.tone}>{label.title}</em>
+                <em className={label.tone}>{label.title}{tagOf(p)}</em>
               </li>
             );
           })}
         </ul>
       )}
 
-      <p className="note" style={{ marginTop: 14 }}>
-        비로그인이라 이 브라우저 기준입니다. 쿠키를 지우면 기록도 사라져요. 최근 100회까지 보여드려요.
-      </p>
+      <p className="note" style={{ marginTop: 14 }}>이 브라우저 기준 · 최근 100회</p>
     </Sheet>
   );
 }
