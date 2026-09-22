@@ -935,3 +935,8 @@ body{display:grid;place-items:center}
 .cdown{display:block;text-align:right;line-height:1.25}
 .cdown__l{display:block;font-size:9px;font-weight:700;color:var(--up);letter-spacing:.04em}
 .cdown b{display:block;font-size:14px;font-weight:800;letter-spacing:-.01em;color:var(--up);margin-top:1px}
+
+/* 누적 통계 타일 — 눌러서 지난 기록을 펼친다 (MyPanel) */
+.mystat{font:inherit;text-align:left;cursor:pointer;transition:background .14s,border-color .14s}
+.mystat:hover{background:rgba(255,255,255,.11)}
+.mystat.is-on{background:rgba(255,255,255,.15);border-color:rgba(255,255,255,.26)}

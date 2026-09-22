@@ -137,7 +137,9 @@ export async function loadPredictions(): Promise<ServerPredictionRow[]> {
     .eq("visitor_hash", visitorHash)
     .eq("role", "general")
     .order("submitted_at", { ascending: false })
-    .limit(20);
+    /* 누적 기록을 화면이 직접 센다. 하루 한 번뿐이라 100 이면 100일치다.
+       더 쌓이면 그때 count 질의로 바꾼다. */
+    .limit(100);
   if (error) throw new Error(error.message);
 
   const entries = data ?? [];

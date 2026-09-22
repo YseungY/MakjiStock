@@ -131,12 +131,31 @@ export function MyPanel() {
   const my = useBreadState();
   const now = useSession();
   const session = now.session;
-  /* 지금 뭔가 할 게 남은 것만 남긴다 — 결과를 기다리는 예측과 아직 쓸 수 있는
-     할인코드. 유효기간이 지난 코드는 서버가 code 를 비워 내려주고(visitor-data.ts),
-     그 줄은 여기서 통째로 사라진다. 다 지나가면 빈 상태로 돌아간다. */
-  const live = preds.filter((p) => p.result === "pending" || p.reward?.code);
+  const [showAll, setShowAll] = useState(false);
+  /* 결과를 기다리는 예측, 아직 쓸 수 있는 할인코드, 그리고 오늘 판정이 난 예측.
+     유효기간이 지난 코드는 서버가 code 를 비워 내려주고(visitor-data.ts) 그 줄은
+     여기서 사라진다.
+
+     마지막 조건이 빠져 있었다. 빗나간 예측은 쿠폰이 없어 앞의 둘에 걸리지 않고
+     통째로 사라졌다 — 참여 화면은 "결과는 06:00에 MY 에서 확인할 수 있어요" 라고
+     약속해 놓고 미적중이면 아무것도 안 보여준 것이다. 판정 대상이 오늘 오전가인
+     예측(= 어제 제출분)은 결과가 무엇이든 하루는 남긴다. */
+  const live = preds.filter(
+    (p) => p.result === "pending" || p.reward?.code || p.target_publish_date === todayKey,
+  );
   /* 만료된 안정형 쿠폰도 내려온다(참여 여부 판정용). 세는 건 쓸 수 있는 것만. */
   const liveInstant = instantRewards.filter((r) => r.code);
+
+  /* 상단 두 숫자는 누적이다. 지금 화면에 뜬 개수를 세면 어제 것이 사라진 순간
+     0 으로 돌아가 "오늘 처음 온 사람" 처럼 보인다. 쌓이는 맛이 이 게임의 동기다.
+     쿠폰은 만료돼도 받았다는 사실은 남으므로 instantRewards 전체를 센다. */
+  const totalPlays = preds.length + instantRewards.length;
+  const totalHits = preds.filter((p) => p.result === "hit" || p.result === "void").length;
+  /* reward_rate_pct 는 제출할 때 박히므로(rollPredictionRewardPct) 판정 전에도 0 이
+     아니다. 그것만 보면 아직 받지 않은 코드까지 센다. 판정이 난 것만 센다. */
+  const totalCodes =
+    preds.filter((p) => (p.result === "hit" || p.result === "void") && p.reward_rate_pct > 0).length +
+    instantRewards.length;
   /* 회차의 한 번을 안정형으로 썼나. 쿠폰이 3시간 뒤 사라져도 이 사실은 남는다 —
      모르면 빈 상태가 "내일 가격 예측하기" 를 다시 권하고, 눌러도 서버가 막는다
      (predictions/route.ts). 마켓 카드와 같은 판정이다. */
@@ -201,8 +220,25 @@ export function MyPanel() {
         <div className="myhead__k">MY MAKJI</div>
         <h2 className="myhead__t">오늘도 한 조각,<br /><em>{lead}</em></h2>
         <div className="myhead__st">
-          <div className="mystat"><b className="n">{live.length}</b><span>예측 참여</span></div>
-          <div className="mystat"><b className="n">{codes}</b><span>할인코드</span></div>
+          {/* 눌러서 지난 기록을 펼친다. 평소에는 진행 중인 것과 오늘 결과만 둔다. */}
+          <button
+            type="button"
+            className={`mystat${showAll ? " is-on" : ""}`}
+            onClick={() => setShowAll((v) => !v)}
+            aria-expanded={showAll}
+          >
+            <b className="n">{totalPlays}</b>
+            <span>참여 누적 {totalPlays > 0 ? `· 적중 ${totalHits}` : ""}</span>
+          </button>
+          <button
+            type="button"
+            className={`mystat${showAll ? " is-on" : ""}`}
+            onClick={() => setShowAll((v) => !v)}
+            aria-expanded={showAll}
+          >
+            <b className="n">{totalCodes}</b>
+            <span>받은 코드 {codes > 0 ? `· 지금 ${codes}` : ""}</span>
+          </button>
         </div>
       </div>
 
@@ -271,7 +307,7 @@ export function MyPanel() {
           {liveInstant.map((r) => (
             <InstantRow key={r.roundId} reward={r} />
           ))}
-          {live.length === 0 && liveInstant.length === 0 ? (
+          {(showAll ? preds : live).length === 0 && liveInstant.length === 0 ? (
             tookInstant ? (
               /* 안정형으로 받았고 3시간이 지났다. 회차는 이미 썼으니 다시 권하지 않는다. */
               <div className="empty">
@@ -291,7 +327,7 @@ export function MyPanel() {
               </div>
             )
           ) : (
-            live.map((p) => {
+            (showAll ? preds : live).map((p) => {
               const b = p.products?.ticker ? breadOf(p.products.ticker) : null;
               const label = RESULT_LABEL[p.result] ?? RESULT_LABEL.pending;
               const diff = p.result_price_won !== null ? p.result_price_won - p.reference_price_won : null;

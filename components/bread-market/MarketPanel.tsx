@@ -342,7 +342,10 @@ export function MarketPanel() {
           const lockedHere = Boolean(lock && lock.dateKey === todayKey && lock.tk === b.tk);
           const lockUsedElsewhere = Boolean(lock && lock.dateKey === todayKey && lock.tk !== b.tk);
           const lockDisabled = session !== "am" || lockUsedElsewhere || !locksOpen;
-          const lockLabel = lockedHere ? "잠금됨" : !locksOpen ? "휴장" : session === "am" ? "오전장" : "06시";
+          /* 지금이 어느 장인지로 통일한다. 잠금이 안 되는 시간대에 "06시" 를 띄우면
+             그것만 시각이라 한 줄에 장 이름과 시각이 섞인다. 언제 열리는지는 잠금
+             카드와 시트가 따로 말한다. */
+          const lockLabel = lockedHere ? "잠금됨" : !locksOpen ? "휴장" : SESSION_LABEL[session];
           return (
             <div className="quote" key={b.tk}>
               <button className="quote__main" onClick={() => openSheet({ type: "detail", tk: b.tk })}>
