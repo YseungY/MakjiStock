@@ -60,7 +60,7 @@ async function main() {
 
   console.log(`\nMAKJI 백테스트 시작: ${startedAt.kst}`);
   console.log(`기간: ${startDate} ~ ${endDate} (${days}일)`);
-  console.log("가격 세션: 오전 06:00 전일 종가 · 오후 16:00 당일 시가");
+  console.log("가격 세션: 오전 06:00 전영업일 시가→종가 · 오후 16:00 그 종가→당일 시가");
   console.log(`네이버: ${naverProvider} · 상품별 1개 그룹으로 ${config.products.length}회 순차 호출\n`);
 
   const trendResult = await fetchTrendsSeparately({
@@ -115,8 +115,8 @@ async function main() {
         `${ECOS_USD_KRW_OPEN.statCode}/${ECOS_USD_KRW_OPEN.itemCode} ${ECOS_USD_KRW_OPEN.itemName}`,
       ],
       fxCredentialMode: process.env.BOK_ECOS_API_KEY ? "api-key" : "sample",
-      morningFxCutoff: "06:00 KST uses the latest two closes dated D-1 or earlier",
-      afternoonFxCutoff: "16:00 KST uses D open compared with the latest close dated D-1 or earlier",
+      morningFxCutoff: "06:00 KST compares the open and close of the latest business day dated D-1 or earlier",
+      afternoonFxCutoff: "16:00 KST compares that same close with D's open",
       fxDirection: "decline adds discount; rise adds surcharge; FX contribution is capped at ±28 percentage points",
       pricing: config.pricing,
     },

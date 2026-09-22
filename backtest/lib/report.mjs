@@ -138,7 +138,7 @@ export function markdownReport(report) {
     `- 네이버 호출: 상품별 1회, 총 ${report.apiCalls.filter((call) => call.provider.startsWith("NAVER_")).length}회`,
     `- 환율 호출: ${report.apiCalls.filter((call) => call.provider === "BOK_ECOS").length}회`,
     `- 환율 원천: 한국은행 ECOS ${report.policy.fxSeries.join(", ")}`,
-    "- 오전 06:00: D-1 이하 최근 두 영업일 종가를 비교",
+    "- 오전 06:00: D-1 이하 최근 영업일의 시가와 종가를 비교",
     "- 오후 16:00: D 당일 시가와 D-1 이하 최근 종가를 비교",
     `- 검색 쿠폰: 검색지수 × ${report.policy.pricing.searchWeight}`,
     `- 환율 조정: clamp(환율하락률 × ${report.policy.pricing.fxWeight} × ${report.policy.pricing.fxScale}, -${report.policy.pricing.fxSurchargeCapPct}, +${report.policy.pricing.fxDiscountCapPct})`,

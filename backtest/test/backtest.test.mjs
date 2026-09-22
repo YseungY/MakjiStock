@@ -94,7 +94,9 @@ test("ECOS 응답에서 원/달러 시가만 시계열로 만든다", () => {
   );
 });
 
-test("오전은 전일 종가끼리, 오후는 당일 시가와 직전 종가를 비교한다", () => {
+/* 두 장이 시간을 이어 덮는다 — 전영업일 시가 →[오전]→ 전영업일 종가 →[오후]→ 당일 시가.
+   구간이 겹치면 같은 환율 움직임이 이틀에 걸쳐 두 번 가격에 반영된다. */
+test("오전은 전영업일 시가와 종가를, 오후는 그 종가와 당일 시가를 비교한다", () => {
   const signals = buildSessionFxSignals({
     closesByDate: {
       "2026-09-11": 1390,
@@ -102,17 +104,17 @@ test("오전은 전일 종가끼리, 오후는 당일 시가와 직전 종가를
       "2026-09-15": 1370,
       "2026-09-16": 1300,
     },
-    opensByDate: { "2026-09-15": 1375 },
+    opensByDate: { "2026-09-14": 1395, "2026-09-15": 1375 },
     publishDates: ["2026-09-15"],
   });
 
   assert.deepEqual(signals["2026-09-15"].morning, {
-    reference: "PREVIOUS_CLOSE_TO_CLOSE",
-    previousDate: "2026-09-11",
-    previousRate: 1390,
+    reference: "PREVIOUS_OPEN_TO_PREVIOUS_CLOSE",
+    previousDate: "2026-09-14",
+    previousRate: 1395,
     currentDate: "2026-09-14",
     currentRate: 1380,
-    declinePct: ((1390 - 1380) / 1390) * 100,
+    declinePct: ((1395 - 1380) / 1395) * 100,
     carriedForward: false,
   });
   assert.deepEqual(signals["2026-09-15"].afternoon, {
@@ -128,9 +130,11 @@ test("오전은 전일 종가끼리, 오후는 당일 시가와 직전 종가를
 
 test("당일 시가가 없는 날의 오후 세션은 오전 가격을 유지한다", () => {
   const publishDates = ["2026-09-15"];
+  /* 주말 모습 그대로 — 전영업일 시가는 있고 당일 시가만 없다.
+     오전장은 전영업일 안에서 끝나므로 그대로 나온다. */
   const fxSignals = buildSessionFxSignals({
     closesByDate: { "2026-09-11": 1390, "2026-09-14": 1380 },
-    opensByDate: {},
+    opensByDate: { "2026-09-14": 1395 },
     publishDates,
   });
   const rows = simulateProductSessions({
@@ -248,4 +252,27 @@ test("할증은 discountFloorPct에서 멈춘다", () => {
     pricing: { ...pricing, discountFloorPct: undefined },
   });
   assert.equal(legacy.discountPct, -28);
+});
+
+/* 오전장의 끝점과 오후장의 시작점이 같아야 구간이 이어진다. */
+test("오전장 끝과 오후장 시작이 같은 값이다", () => {
+  const signals = buildSessionFxSignals({
+    closesByDate: { "2026-09-14": 1380, "2026-09-15": 1370 },
+    opensByDate: { "2026-09-14": 1395, "2026-09-15": 1375 },
+    publishDates: ["2026-09-15"],
+  });
+  const { morning, afternoon } = signals["2026-09-15"];
+  assert.equal(morning.currentRate, afternoon.previousRate);
+  assert.equal(morning.currentDate, afternoon.previousDate);
+});
+
+/* 전영업일 시가가 없으면 오전장을 만들지 않는다 — 없는 값으로 짐작해 가격을 내보내지 않는다. */
+test("전영업일 시가가 없으면 오전 세션이 없다", () => {
+  const signals = buildSessionFxSignals({
+    closesByDate: { "2026-09-14": 1380 },
+    opensByDate: { "2026-09-15": 1375 },
+    publishDates: ["2026-09-15"],
+  });
+  assert.equal(signals["2026-09-15"].morning, null);
+  assert.ok(signals["2026-09-15"].afternoon, "오후는 그대로 나온다");
 });

@@ -109,7 +109,7 @@ select{
   <p class="sub">
     운영 산식 <code>lib/pricing/pricing.mjs</code> · <code>calculateDay</code> 를 그대로 옮겨 실데이터에 적용합니다.
     검색지수는 네이버 데이터랩, 환율은 한국은행 ECOS 원/달러입니다 —
-    오전가는 직전 두 영업일 <b>종가</b>끼리, 오후가는 당일 <b>시가</b>와 직전 종가를 비교합니다.
+    오전가는 전영업일의 <b>시가와 종가</b>를, 오후가는 그 <b>종가와 당일 시가</b>를 비교합니다 — 두 장이 시간을 이어 덮습니다.
     <span id="meta"></span>
   </p>
 </header>
