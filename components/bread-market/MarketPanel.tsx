@@ -6,6 +6,7 @@ import {
   BREADS,
   addDays,
   arrow,
+  discMark,
   changeAt,
   cls,
   dirColor,
@@ -289,7 +290,13 @@ export function MarketPanel() {
         <LockCard todayKey={todayKey} />
       </div>
 
+      {/* 숫자와 색이 서로 다른 것을 재기 때문에 한 줄 적어 둔다. */}
       <div className="sect sect--tight">
+        <p className="note">
+          숫자는 <b>정가 대비 할인율</b>이라 화살표는 늘 <b>▼</b>예요. 색이 <b>어제 대비 등락</b>이고요 —
+          빵값이 오른 날은 <b className="up">▼ 빨강</b>, 내린 날은 <b className="down">▼ 파랑</b>,
+          어제와 같으면 <b className="flat">— 회색</b>이에요.
+        </p>
       </div>
 
       <div className="sortbar">
@@ -307,9 +314,13 @@ export function MarketPanel() {
         {rows.map(({ b, q, d }) => {
           const c = cls(d.pct);
           const rowList = isListPriceAt(b, todayKey, session);
-          /* 화살표·색은 직전 확정가 대비 등락(상승 빨강·하락 파랑), 숫자는 정가 대비
+          /* 색은 직전 확정가 대비 등락(상승 빨강·하락 파랑·보합 회색), 숫자는 정가 대비
              할인율이다. 소비자가 결정에 쓰는 값은 "어제보다 얼마 움직였나" 가 아니라
-             "정가에서 얼마 빠졌나" 다. 산식 상 판매가가 정가를 넘지 않으므로 0 이상이다. */
+             "정가에서 얼마 빠졌나" 다. 산식 상 판매가가 정가를 넘지 않으므로 0 이상이다.
+
+             화살표는 언제나 ▼ 다(discMark). 숫자가 정가에서 내려온 폭이라 방향이 하나뿐이고,
+             가격 방향으로 돌리면 "▲ 6.3%" 가 "6.3% 올랐다" 로 읽혀 할인율이 등락률로
+             보인다. 상단 티커(Shell.tsx)도 같은 규칙이다. */
           const offPct = Math.max(0, -q.vsBase);
           const col = rowList ? dirColor("flat") : dirColor(c);
           const p = linePath(seriesAt(b, todayKey, 7, session).map((s) => s.q.price), 54, 26, 3);
@@ -350,7 +361,7 @@ export function MarketPanel() {
                     className={`quote__d n ${c}`}
                     title={`정가 ${won(b.base)}원 대비 ${fixed(offPct)}% 할인 · 직전 ${won(d.previousPrice)}원 대비 ${signed(d.amount, 0)}원 (${signed(d.pct)}%)`}
                   >
-                    {arrow(d.pct)} {fixed(offPct)}%
+                    {discMark(d.pct)} {fixed(offPct)}%
                   </em>
                 )}
               </button>

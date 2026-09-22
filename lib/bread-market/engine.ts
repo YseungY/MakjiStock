@@ -109,6 +109,16 @@ export function arrow(v: number) {
   return v < -0.049 ? "▼" : v > 0.049 ? "▲" : "—";
 }
 
+/** 시세표·티커에서 정가 대비 할인율 앞에 붙는 기호.
+
+    방향은 언제나 아래다 — 숫자가 "정가에서 얼마 내려왔나" 이고 산식 상 판매가가
+    정가를 넘지 않는다. 어제 대비 등락은 색이 말하므로(상승 빨강·하락 파랑)
+    화살표까지 그쪽으로 돌리면 두 기준이 한 자리에서 섞인다.
+    어제와 같은 날만 —로 둔다. */
+export function discMark(pctChange: number) {
+  return cls(pctChange) === "flat" ? "—" : "▼";
+}
+
 /* 할인이 0일 때 '−0.0%p' 로 보이지 않게 (환율 상승일에 자주 발생) */
 export function discTxt(v: number) {
   if (Math.abs(v) < 0.05) return "0.0%p";

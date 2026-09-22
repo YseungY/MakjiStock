@@ -5,7 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BREADS,
-  arrow,
+  discMark,
   changeAt,
   isListPriceAt,
   cls,
@@ -103,10 +103,11 @@ function Tape({ todayKey, session }: { todayKey: string; session: Session }) {
         <b>{b.tk}</b>
         <s className="n">{won(q.price)}</s>
         {/* 정가에는 등락을 붙이지 않는다 — 오늘 가격이 아직 없다는 뜻이다.
-            화살표·색은 직전 확정가 대비 등락, 숫자는 정가 대비 할인율이다(시세표와 같다). */}
+            색은 직전 확정가 대비 등락, 숫자는 정가 대비 할인율, 화살표는 언제나 ▼ 다
+            (시세표와 같다. engine.ts discMark 참고). */}
         {listPrice ? null : (
           <em className={`${cls(d.pct)} n`}>
-            {arrow(d.pct)} {fixed(Math.max(0, -q.vsBase))}%
+            {discMark(d.pct)} {fixed(Math.max(0, -q.vsBase))}%
           </em>
         )}
       </span>
