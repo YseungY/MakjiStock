@@ -1,4 +1,5 @@
-import { CAFE24_WRITES_ENABLED, cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
+import { CAFE24_WRITES_ENABLED, cafe24ShopNo } from "@/lib/cafe24/client";
+import { syncCafe24ProductPrice } from "@/lib/cafe24/price-sync";
 import pricingConfig from "@/config/pricing-products.json";
 import { kstToday } from "@/lib/pricing/dates.mjs";
 import { supabaseAdmin } from "@/lib/supabase/admin";
@@ -95,18 +96,20 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
         continue;
       }
       try {
-        // Cafe24 는 POST·PUT 에 쿼리스트링을 받지 않는다. shop_no 는 body 로만 보낸다.
-        await cafe24Request(`/api/v2/admin/products/${product.cafe24_product_no}`, {
-          method: "PUT",
-          body: JSON.stringify({
-            shop_no: shopNo,
-            request: { price: String(product.base_price_won) },
-          }),
+        const sync = await syncCafe24ProductPrice({
+          productId: product.id,
+          productNo: product.cafe24_product_no,
+          productSalePriceWon: product.base_price_won,
+          discountPct: 0,
+          shopNo,
         });
         applied.push({
           ticker: product.ticker,
           productNo: String(product.cafe24_product_no),
           listPriceWon: String(product.base_price_won),
+          variantsUpdated: String(sync.variantsUpdated),
+          optionPrices: sync.optionPrices.join(" | "),
+          ...(sync.optionsSkippedReason ? { optionsNote: sync.optionsSkippedReason } : {}),
           result: "applied",
         });
       } catch (cause) {

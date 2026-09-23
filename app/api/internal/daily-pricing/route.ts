@@ -1,5 +1,6 @@
 import pricingConfig from "@/config/pricing-products.json";
-import { CAFE24_WRITES_ENABLED, cafe24Request, cafe24ShopNo } from "@/lib/cafe24/client";
+import { CAFE24_WRITES_ENABLED, cafe24ShopNo } from "@/lib/cafe24/client";
+import { syncCafe24ProductPrice } from "@/lib/cafe24/price-sync";
 import { issueLockCodes, type IssueResult } from "@/lib/locks/lock-codes";
 import { resolvePredictions, type ResolveResult } from "@/lib/predictions/resolve";
 import { addDays, kstToday } from "@/lib/pricing/dates.mjs";
@@ -310,18 +311,14 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
           applied.push({ ticker: product.ticker, result: "skipped", reason: "로컬 — 실몰 반영 생략" });
           continue;
         }
-        /* Cafe24 는 POST·PUT 에 쿼리스트링을 허용하지 않는다.
-           400 "Query String is not available for POST, PUT Method."
-           shop_no 는 body 로만 보낸다. */
-        const path = `/api/v2/admin/products/${product.cafe24_product_no}`;
         try {
-          /* 계산된 가격을 항상 PUT 한다. GET 으로 현재가를 먼저 보던 방식은
-             호출이 2번이고, 같은 값이면 PUT 이 어차피 무해하다.
-             대신 Cafe24 쪽 변경 전 가격은 남지 않는다. 우리 직전 가격은
-             daily_prices.previous_price_won 에 이미 있다. */
-          await cafe24Request(path, {
-            method: "PUT",
-            body: JSON.stringify({ shop_no: shopNo, request: { price: String(calc!.priceWon) } }),
+          const sync = await syncCafe24ProductPrice({
+            productId: product.id,
+            productNo: product.cafe24_product_no,
+            productSalePriceWon: calc!.priceWon,
+            discountPct: calc!.discountPct,
+            shopNo,
+            roundingWon: pricing.priceRoundingWon,
           });
           await db
             .from("daily_prices")
@@ -335,6 +332,9 @@ async function run(request: Request, { defaultCommit }: { defaultCommit: boolean
             productNo: String(product.cafe24_product_no),
             previousWon: String(prevByProduct.get(product.id) ?? "-"),
             appliedWon: String(calc!.priceWon),
+            variantsUpdated: String(sync.variantsUpdated),
+            optionPrices: sync.optionPrices.join(" | "),
+            ...(sync.optionsSkippedReason ? { optionsNote: sync.optionsSkippedReason } : {}),
             result: "applied",
           });
         } catch (cause) {
