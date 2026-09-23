@@ -18,6 +18,7 @@ test("정상 값은 그대로 쓴다", () => {
 });
 
 test("?? 만 쓰면 빈 문자열이 0 이 된다 (이 버그를 막는다)", () => {
-  assert.equal(Number("" ?? 1), 0);
+  const naive = (raw) => Number(raw ?? 1);
+  assert.equal(naive(""), 0);
   assert.equal(shopNo(""), 1);
 });
