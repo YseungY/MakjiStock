@@ -20,9 +20,10 @@ test("실제 옵션 정가 19개를 모두 보존한다", () => {
 });
 
 test("옵션 총액에 같은 할인율을 적용한 뒤 대표 판매가와의 차이를 추가금으로 만든다", () => {
+  const definitions = CAFE24_OPTION_PRICES.morning_roll;
   const plan = buildVariantPricePlan({
-    variants: variants("1개 (4개입)", "3개 SET (10%↓)", "5개 SET (15%↓)"),
-    definitions: CAFE24_OPTION_PRICES.morning_roll,
+    variants: variants(...definitions.map((definition) => definition.optionValue)),
+    definitions,
     productSalePriceWon: 3_150,
     discountPct: 30,
   });
@@ -66,14 +67,18 @@ test("정가 리셋은 옵션 추가금도 원래 값으로 복원한다", () =>
 });
 
 test("옵션 이름이 빠지거나 예상 밖 옵션이 있으면 대표가 반영 전에 실패시킨다", () => {
+  const definitions = CAFE24_OPTION_PRICES.morning_roll;
   const plan = buildVariantPricePlan({
-    variants: variants("1개 (4개입)", "몰에만 있는 옵션"),
-    definitions: CAFE24_OPTION_PRICES.morning_roll,
+    variants: variants(definitions[0].optionValue, "몰에만 있는 옵션"),
+    definitions,
     productSalePriceWon: 3_150,
     discountPct: 30,
   });
 
-  assert.deepEqual(plan.missingOptionValues, ["3개 SET (10%↓)", "5개 SET (15%↓)"]);
+  assert.deepEqual(
+    plan.missingOptionValues,
+    definitions.slice(1).map((definition) => definition.optionValue),
+  );
   assert.deepEqual(plan.unmatchedVariantValues, ["몰에만 있는 옵션"]);
   assert.throws(() => assertCompleteVariantPricePlan(plan), /옵션 매핑 불일치/);
 });
