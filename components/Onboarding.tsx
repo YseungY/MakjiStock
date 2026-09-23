@@ -99,8 +99,8 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
                 </div>
               </div>
               <div className="badgeRow">
-                <span className="obBadge obBadge--noPredict">예측 없이 10–15%</span>
-                <span className="obBadge obBadge--predict">맞히면 5–20%</span>
+                <span className="obBadge obBadge--noPredict">예측 없이 5–10%</span>
+                <span className="obBadge obBadge--predict">맞히면 5–13%</span>
               </div>
               <div className="headline">{withBreaks("내일 오를지 내릴지\n맞히면 할인코드를 드려요")}</div>
               <div className="desc">{withBreaks("둘 중 하나만, 하루 한 번\n참여할 수 있어요.")}</div>

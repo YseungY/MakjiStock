@@ -297,7 +297,7 @@ export function DetailSheet({ tk, onClose }: { tk: string; onClose: () => void }
           <b className="n calc__step-p">{won(q.price)}원</b>
         </div>
         <div className="calc__r is-total">
-          <span>최종 <small style={{ fontWeight: 600, color: "var(--ink-3)" }}>할인 38%까지 · 정가보다 비싸지지 않아요</small></span>
+          <span>최종 <small style={{ fontWeight: 600, color: "var(--ink-3)" }}>할인 28%까지 · 정가보다 비싸지지 않아요</small></span>
           <b className={`n ${discCls(q.total)}`}>{discTxt(q.total)}</b>
         </div>
       </div>
