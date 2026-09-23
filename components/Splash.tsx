@@ -18,7 +18,9 @@ export function Splash({ onDone }: { onDone: () => void }) {
     setTimeout(() => {
       try {
         localStorage.setItem(SPLASH_SEEN_KEY, "1");
-      } catch {}
+      } catch {
+        // localStorage may be unavailable in private browsing contexts.
+      }
       setGone(true);
       onDone();
     }, 250);
@@ -27,10 +29,12 @@ export function Splash({ onDone }: { onDone: () => void }) {
   useEffect(() => {
     const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reducedMotion) {
-      setShutterVisible(false);
-      setCaptionOpen(true);
-      finish();
-      return;
+      const reducedMotionTimer = setTimeout(() => {
+        setShutterVisible(false);
+        setCaptionOpen(true);
+        finish();
+      }, 0);
+      return () => clearTimeout(reducedMotionTimer);
     }
     const revealTimer = setTimeout(() => setCaptionOpen(true), 1450);
     const fallback = setTimeout(() => setShutterVisible(false), 3100);
@@ -85,6 +89,7 @@ export function Splash({ onDone }: { onDone: () => void }) {
         </button>
       </div>
 
+      {/* eslint-disable-next-line react/no-unknown-property */}
       <style jsx>{`
         .overlay {
           position: fixed;

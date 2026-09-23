@@ -11,7 +11,8 @@ export function OnboardingGate({ children }: { children: React.ReactNode }) {
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
-    setShowOnboarding(true);
+    const onboardingTimer = setTimeout(() => setShowOnboarding(true), 0);
+    return () => clearTimeout(onboardingTimer);
   }, []);
 
   return (

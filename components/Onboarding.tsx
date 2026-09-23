@@ -24,7 +24,9 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   function finish() {
     try {
       localStorage.setItem(ONBOARDING_SEEN_KEY, "1");
-    } catch {}
+    } catch {
+      // localStorage may be unavailable in private browsing contexts.
+    }
     onDone();
   }
 
@@ -112,6 +114,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
         </div>
       </div>
 
+      {/* eslint-disable-next-line react/no-unknown-property */}
       <style jsx>{`
         .overlay {
           position: fixed;

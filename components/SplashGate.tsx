@@ -12,7 +12,8 @@ export function SplashGate({ children }: { children: React.ReactNode }) {
   const [showSplash, setShowSplash] = useState(false);
 
   useEffect(() => {
-    setShowSplash(true);
+    const splashTimer = setTimeout(() => setShowSplash(true), 0);
+    return () => clearTimeout(splashTimer);
   }, []);
 
   return (
